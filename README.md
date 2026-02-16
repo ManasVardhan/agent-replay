@@ -1,6 +1,3 @@
-<p align="center">
-  <img src="assets/banner.svg" alt="agent-replay" width="800">
-</p>
 
 # agent-replay
 
