@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/hero.svg" alt="agent-replay" width="800">
+  <img src="assets/banner.svg" alt="agent-replay" width="800">
 </p>
 
 # agent-replay
