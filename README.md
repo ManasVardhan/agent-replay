@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/hero.svg" alt="agent-replay" width="800">
+</p>
+
 # agent-replay
 
 [![PyPI version](https://img.shields.io/pypi/v/agent-replay.svg)](https://pypi.org/project/agent-replay/)
