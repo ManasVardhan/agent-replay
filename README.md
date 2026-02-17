@@ -41,7 +41,7 @@ Agent Run ──> Recorder ──> Trace File (.jsonl) ──> Replay Viewer
 │  │          rec.llm_response(content="...", tokens=42)   │  │
 │  │      with rec.span("tool-use"):                       │  │
 │  │          rec.tool_call("search", {"q": "..."})        │  │
-│  │          rec.tool_result("search", {...})              │  │
+│  │          rec.tool_result("search", {...})             │  │
 │  └───────────────────────────────────────────────────────┘  │
 └──────────────────────────┬──────────────────────────────────┘
                            │
