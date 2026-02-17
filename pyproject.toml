@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agent-replay"
+name = "agent-trace-replay"
 version = "0.1.0"
 description = "Record, replay, and debug AI agent execution traces"
 readme = "README.md"
