@@ -47,11 +47,12 @@ class TraceViewer:
     def show_trace(self, trace: Trace) -> None:
         """Display a full trace overview."""
         self.console.print()
+        duration_str = f"{trace.duration:.3f}s" if trace.duration else "running"
         self.console.print(Panel(
             f"[bold]{trace.name}[/bold]\n"
             f"ID: [dim]{trace.trace_id}[/dim]\n"
             f"Spans: {len(trace.spans)} | Events: {trace.event_count}\n"
-            f"Duration: {trace.duration:.3f}s" if trace.duration else "Duration: running",
+            f"Duration: {duration_str}",
             title="[bold cyan]Agent Trace[/bold cyan]",
             border_style="cyan",
         ))
