@@ -3,7 +3,7 @@
 
 > **New here?** Start with the [Getting Started Guide](GETTING_STARTED.md).
 
-[![PyPI version](https://img.shields.io/pypi/v/agent-replay.svg)](https://pypi.org/project/agent-replay/)
+[![PyPI version](https://img.shields.io/pypi/v/agent-trace-replay.svg)](https://pypi.org/project/agent-trace-replay/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Tests](https://github.com/manasvardhan/agent-replay/actions/workflows/ci.yml/badge.svg)](https://github.com/manasvardhan/agent-replay/actions)
@@ -57,7 +57,7 @@ Agent Run ──> Recorder ──> Trace File (.jsonl) ──> Replay Viewer
 ## Quick Start
 
 ```bash
-pip install agent-replay
+pip install agent-trace-replay
 ```
 
 ```python

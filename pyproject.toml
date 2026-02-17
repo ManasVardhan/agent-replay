@@ -3,13 +3,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agent-replay"
-version = "0.1.0"
+name = "agent-trace-replay"
+version = "0.1.1"
 description = "Record, replay, and debug AI agent execution traces"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
-authors = [{ name = "Manas Vardhan" }]
+authors = [{ name = "Manas Vardhan", email = "manasvardhan@gmail.com" }]
 keywords = ["ai", "agents", "debugging", "tracing", "observability"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -37,6 +37,8 @@ dev = [
 agent-replay = "agent_replay.cli:cli"
 
 [project.urls]
+Documentation = "https://github.com/ManasVardhan/agent-replay#readme"
+Changelog = "https://github.com/ManasVardhan/agent-replay/releases"
 Homepage = "https://github.com/manasvardhan/agent-replay"
 Repository = "https://github.com/manasvardhan/agent-replay"
 Issues = "https://github.com/manasvardhan/agent-replay/issues"
