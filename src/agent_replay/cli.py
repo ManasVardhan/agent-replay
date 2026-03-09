@@ -17,7 +17,7 @@ console = Console()
 
 
 @click.group()
-@click.version_option(version="0.1.0", prog_name="agent-replay")
+@click.version_option(package_name="agent-trace-replay", prog_name="agent-replay")
 def cli() -> None:
     """Record, replay, and debug AI agent execution traces."""
 

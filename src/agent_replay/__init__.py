@@ -1,6 +1,6 @@
 """agent-replay: Record, replay, and debug AI agent execution traces."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from .recorder import Recorder, record_trace
 from .trace import Event, EventType, Span, Trace
