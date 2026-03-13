@@ -1,10 +1,7 @@
 """Tests for the trace data model."""
 
-import json
-import tempfile
 from pathlib import Path
 
-import pytest
 
 from agent_replay.trace import Event, EventType, Span, Trace
 
@@ -26,7 +23,7 @@ def test_event_roundtrip():
 
 def test_span_add_event():
     span = Span(name="test-span")
-    event = span.add_event(EventType.LOG, {"message": "hello"})
+    span.add_event(EventType.LOG, {"message": "hello"})
     assert len(span.events) == 1
     assert span.events[0].data["message"] == "hello"
 

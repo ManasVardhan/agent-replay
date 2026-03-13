@@ -5,11 +5,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 
 from agent_replay.recorder import Recorder
 from agent_replay.replay import ReplayEngine
-from agent_replay.trace import Event, EventType, Span, Trace
+from agent_replay.trace import EventType, Span, Trace
 from agent_replay.diff import diff_traces
 from agent_replay.exporters import export_html, export_json
 

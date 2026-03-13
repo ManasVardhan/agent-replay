@@ -9,7 +9,6 @@ from click.testing import CliRunner
 
 from agent_replay.cli import cli
 from agent_replay.recorder import Recorder
-from agent_replay.trace import Trace
 
 
 def _create_trace(path: Path, name: str = "cli-test") -> Path:

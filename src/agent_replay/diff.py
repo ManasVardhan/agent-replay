@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .trace import Event, EventType, Span, Trace
+from .trace import Event, EventType, Trace
 
 
 @dataclass
@@ -71,10 +71,6 @@ def diff_traces(trace_a: Trace, trace_b: Trace) -> DiffResult:
     result = DiffResult(trace_a_id=trace_a.trace_id, trace_b_id=trace_b.trace_id)
     events_a = trace_a.all_events()
     events_b = trace_b.all_events()
-
-    # Build span lookup
-    span_lookup_a = {s.span_id: s.name for s in trace_a.spans}
-    span_lookup_b = {s.span_id: s.name for s in trace_b.spans}
 
     def _span_for_event(trace: Trace, event: Event) -> str:
         for span in trace.spans:

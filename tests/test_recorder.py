@@ -1,6 +1,5 @@
 """Tests for the recorder."""
 
-import tempfile
 from pathlib import Path
 
 from agent_replay.recorder import Recorder, record_trace

@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
 from rich.tree import Tree
 
-from .diff import DiffResult, Divergence
+from .diff import DiffResult
 from .replay import ReplayEngine
 from .trace import EventType, Span, Trace
 

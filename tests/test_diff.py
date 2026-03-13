@@ -2,7 +2,6 @@
 
 from agent_replay.diff import diff_traces
 from agent_replay.recorder import Recorder
-from agent_replay.trace import EventType
 
 
 def test_diff_identical():
