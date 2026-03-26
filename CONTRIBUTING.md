@@ -1,11 +1,11 @@
 # Contributing to agent-replay
 
-Thanks for your interest in contributing!
+Thanks for your interest in contributing! Here's how to get started.
 
-## Development Setup
+## Setup
 
 ```bash
-git clone https://github.com/manasvardhan/agent-replay.git
+git clone https://github.com/ManasVardhan/agent-replay.git
 cd agent-replay
 python -m venv .venv
 source .venv/bin/activate
@@ -15,27 +15,54 @@ pip install -e ".[dev]"
 ## Running Tests
 
 ```bash
-pytest
-pytest --cov=agent_replay
+pytest -v
+pytest --cov=agent_replay --cov-report=term-missing
 ```
 
 ## Code Style
 
-- Python 3.10+ with type annotations
-- Follow existing code patterns
-- Keep functions focused and well-documented
+We use [ruff](https://docs.astral.sh/ruff/) for linting:
 
-## Pull Requests
+```bash
+ruff check src/ tests/
+ruff format src/ tests/
+```
+
+## Pull Request Guidelines
 
 1. Fork the repo and create a feature branch
-2. Add tests for new functionality
-3. Ensure all tests pass
-4. Submit a PR with a clear description
+2. Write tests for any new functionality
+3. Make sure all tests pass (`pytest -v`)
+4. Run `ruff check` and fix any issues
+5. Keep commits focused and descriptive
+6. Open a PR against `main`
 
-## Reporting Issues
+## What to Work On
 
-Open an issue with:
-- What you expected
-- What actually happened
-- Steps to reproduce
-- Python version and OS
+Check the [Issues](https://github.com/ManasVardhan/agent-replay/issues) page for open tasks. Issues labeled `good-first-issue` are great starting points.
+
+Some areas that could use help:
+
+- **More export formats** (CSV, Parquet, OpenTelemetry)
+- **Framework integrations** (LangChain, CrewAI, AutoGen)
+- **Trace filtering** (by event type, time range, span name)
+- **Statistics** (token usage summaries, latency breakdowns)
+- **Async support** (async context managers for recording)
+
+## Architecture
+
+```
+src/agent_replay/
+    __init__.py      # Public API exports
+    cli.py           # Click CLI commands
+    diff.py          # Trace comparison engine
+    exporters.py     # JSON and HTML export
+    recorder.py      # Recorder context manager and decorator
+    replay.py        # Step-through replay engine
+    trace.py         # Core data model (Event, Span, Trace)
+    viewer.py        # Rich terminal rendering
+```
+
+## Questions?
+
+Open an issue or reach out to [@vardhan_manas](https://twitter.com/vardhan_manas).

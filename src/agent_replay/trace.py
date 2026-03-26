@@ -180,16 +180,27 @@ class Trace:
 
     @classmethod
     def load(cls, path: str | Path) -> Trace:
-        """Load trace from a JSONL file."""
+        """Load trace from a JSONL file.
+
+        Malformed lines are skipped with a warning printed to stderr.
+        """
         path = Path(path)
         spans: list[Span] = []
         header: dict[str, Any] = {}
         with open(path) as f:
-            for line in f:
+            for line_num, line in enumerate(f, 1):
                 line = line.strip()
                 if not line:
                     continue
-                record = json.loads(line)
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    import sys
+                    print(
+                        f"Warning: skipping malformed JSON on line {line_num} in {path}",
+                        file=sys.stderr,
+                    )
+                    continue
                 if record.get("type") == "trace_header":
                     header = record
                 elif record.get("type") == "span":
