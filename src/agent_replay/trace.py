@@ -139,6 +139,39 @@ class Trace:
             events.extend(span.events)
         return sorted(events, key=lambda e: e.timestamp)
 
+    def filter_events(self, *event_types: EventType) -> list[Event]:
+        """Return events matching any of the given types, sorted by timestamp.
+
+        Parameters
+        ----------
+        *event_types : one or more EventType values to include
+
+        Returns
+        -------
+        List of matching Event objects sorted by timestamp.
+        """
+        type_set = set(event_types)
+        events = []
+        for span in self.spans:
+            for event in span.events:
+                if event.event_type in type_set:
+                    events.append(event)
+        return sorted(events, key=lambda e: e.timestamp)
+
+    def event_type_counts(self) -> dict[str, int]:
+        """Return a count of events grouped by event type.
+
+        Returns
+        -------
+        Dict mapping event type value strings to their count.
+        """
+        counts: dict[str, int] = {}
+        for span in self.spans:
+            for event in span.events:
+                key = event.event_type.value
+                counts[key] = counts.get(key, 0) + 1
+        return counts
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "trace_id": self.trace_id,

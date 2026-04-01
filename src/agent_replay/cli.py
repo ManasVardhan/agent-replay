@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json as json_mod
 from pathlib import Path
 
 import click
@@ -10,7 +11,7 @@ from rich.console import Console
 from .diff import diff_traces
 from .exporters import export_html, export_json
 from .replay import ReplayEngine
-from .trace import Trace
+from .trace import EventType, Trace
 from .viewer import TraceViewer
 
 console = Console()
@@ -114,23 +115,19 @@ def info(trace_file: Path) -> None:
 
 @cli.command()
 @click.argument("trace_file", type=click.Path(exists=True, path_type=Path))
-def stats(trace_file: Path) -> None:
-    """Show aggregate statistics for a trace."""
-    from .trace import EventType
-
+@click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
+def stats(trace_file: Path, as_json: bool) -> None:
+    """Show detailed statistics for a trace file."""
     trace = Trace.load(trace_file)
     events = trace.all_events()
 
     # Count by type
-    type_counts: dict[str, int] = {}
+    type_counts = trace.event_type_counts()
     total_tokens = 0
     models_used: set[str] = set()
     tools_used: set[str] = set()
 
     for event in events:
-        label = event.event_type.value
-        type_counts[label] = type_counts.get(label, 0) + 1
-
         if event.event_type == EventType.LLM_REQUEST:
             model = event.data.get("model", "")
             if model:
@@ -144,7 +141,27 @@ def stats(trace_file: Path) -> None:
             if tool:
                 tools_used.add(tool)
 
-    console.print(f"[bold cyan]Stats: {trace.name}[/bold cyan]")
+    span_durations: dict[str, float | None] = {}
+    for span in trace.spans:
+        span_durations[span.name] = span.duration
+
+    if as_json:
+        data = {
+            "name": trace.name,
+            "trace_id": trace.trace_id,
+            "spans": len(trace.spans),
+            "events": trace.event_count,
+            "duration": trace.duration,
+            "total_tokens": total_tokens,
+            "models_used": sorted(models_used),
+            "tools_used": sorted(tools_used),
+            "event_type_counts": type_counts,
+            "span_durations": span_durations,
+        }
+        console.print(json_mod.dumps(data, indent=2, default=str))
+        return
+
+    console.print(f"\n[bold cyan]Stats: {trace.name}[/bold cyan]")
     duration = f"{trace.duration:.3f}s" if trace.duration else "N/A"
     console.print(f"  Duration:     {duration}")
     console.print(f"  Spans:        {len(trace.spans)}")
@@ -163,6 +180,12 @@ def stats(trace_file: Path) -> None:
 
     if tools_used:
         console.print(f"[bold]Tools used:[/bold]  {', '.join(sorted(tools_used))}")
+
+    if span_durations:
+        console.print("\n[bold]Span durations:[/bold]")
+        for name, dur in span_durations.items():
+            dur_str = f"{dur:.3f}s" if dur is not None else "open"
+            console.print(f"  {name:<30} {dur_str}")
 
 
 @cli.command()
