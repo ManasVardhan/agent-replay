@@ -110,3 +110,85 @@ def info(trace_file: Path) -> None:
     duration = f"{trace.duration:.3f}s" if trace.duration else "N/A"
     console.print(f"  Duration: {duration}")
     console.print(f"  Metadata: {trace.metadata}")
+
+
+@cli.command()
+@click.argument("trace_file", type=click.Path(exists=True, path_type=Path))
+def stats(trace_file: Path) -> None:
+    """Show aggregate statistics for a trace."""
+    from .trace import EventType
+
+    trace = Trace.load(trace_file)
+    events = trace.all_events()
+
+    # Count by type
+    type_counts: dict[str, int] = {}
+    total_tokens = 0
+    models_used: set[str] = set()
+    tools_used: set[str] = set()
+
+    for event in events:
+        label = event.event_type.value
+        type_counts[label] = type_counts.get(label, 0) + 1
+
+        if event.event_type == EventType.LLM_REQUEST:
+            model = event.data.get("model", "")
+            if model:
+                models_used.add(model)
+        elif event.event_type == EventType.LLM_RESPONSE:
+            tokens = event.data.get("tokens")
+            if tokens and isinstance(tokens, int):
+                total_tokens += tokens
+        elif event.event_type == EventType.TOOL_CALL:
+            tool = event.data.get("tool", "")
+            if tool:
+                tools_used.add(tool)
+
+    console.print(f"[bold cyan]Stats: {trace.name}[/bold cyan]")
+    duration = f"{trace.duration:.3f}s" if trace.duration else "N/A"
+    console.print(f"  Duration:     {duration}")
+    console.print(f"  Spans:        {len(trace.spans)}")
+    console.print(f"  Total events: {len(events)}")
+
+    if type_counts:
+        console.print("\n[bold]Event breakdown:[/bold]")
+        for etype, count in sorted(type_counts.items()):
+            console.print(f"  {etype:<20} {count:>5}")
+
+    if total_tokens:
+        console.print(f"\n  Total LLM tokens: {total_tokens:,}")
+
+    if models_used:
+        console.print(f"\n[bold]Models used:[/bold] {', '.join(sorted(models_used))}")
+
+    if tools_used:
+        console.print(f"[bold]Tools used:[/bold]  {', '.join(sorted(tools_used))}")
+
+
+@cli.command()
+@click.argument("trace_file", type=click.Path(exists=True, path_type=Path))
+@click.argument("query")
+def search(trace_file: Path, query: str) -> None:
+    """Search for events matching a query string."""
+    trace = Trace.load(trace_file)
+    engine = ReplayEngine(trace)
+    positions = engine.search(query)
+
+    if not positions:
+        console.print(f"[dim]No events matching '{query}'[/dim]")
+        return
+
+    console.print(f"[bold cyan]Found {len(positions)} match(es) for '{query}':[/bold cyan]\n")
+    for pos in positions:
+        pair = engine.jump(pos)
+        if pair:
+            span, event = pair
+            console.print(
+                f"  [{pos + 1}] [yellow]{span.name}[/yellow] "
+                f"[dim]{event.event_type.value}[/dim]"
+            )
+            # Show relevant data preview
+            data_str = str(event.data)
+            if len(data_str) > 120:
+                data_str = data_str[:120] + "..."
+            console.print(f"      {data_str}")
