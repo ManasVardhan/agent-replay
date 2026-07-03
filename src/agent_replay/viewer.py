@@ -45,7 +45,7 @@ class TraceViewer:
     def show_trace(self, trace: Trace) -> None:
         """Display a full trace overview."""
         self.console.print()
-        duration_str = f"{trace.duration:.3f}s" if trace.duration else "running"
+        duration_str = f"{trace.duration:.3f}s" if trace.duration is not None else "running"
         self.console.print(Panel(
             f"[bold]{trace.name}[/bold]\n"
             f"ID: [dim]{trace.trace_id}[/dim]\n"
@@ -60,7 +60,7 @@ class TraceViewer:
 
     def _show_span(self, span: Span, indent: int = 0) -> None:
         prefix = "  " * indent
-        duration = f" ({span.duration:.3f}s)" if span.duration else ""
+        duration = f" ({span.duration:.3f}s)" if span.duration is not None else ""
         self.console.print(f"\n{prefix}[bold yellow]>>> {span.name}[/bold yellow]{duration}")
 
         for event in span.events:
@@ -108,7 +108,7 @@ class TraceViewer:
 
         for span in trace.spans:
             parent = span_nodes.get(span.parent_id, tree) if span.parent_id else tree  # type: ignore
-            duration = f" [{span.duration:.3f}s]" if span.duration else ""
+            duration = f" [{span.duration:.3f}s]" if span.duration is not None else ""
             node = parent.add(f"[yellow]{span.name}[/yellow]{duration}")
             span_nodes[span.span_id] = node
 

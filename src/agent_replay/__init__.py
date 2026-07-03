@@ -7,6 +7,7 @@ from .trace import Event, EventType, Span, Trace
 from .replay import ReplayEngine
 from .diff import diff_traces, DiffResult, Divergence
 from .exporters import export_html, export_json
+from .redact import redact_trace, BUILTIN_PATTERNS
 
 __all__ = [
     "Recorder",
@@ -21,4 +22,6 @@ __all__ = [
     "Divergence",
     "export_html",
     "export_json",
+    "redact_trace",
+    "BUILTIN_PATTERNS",
 ]

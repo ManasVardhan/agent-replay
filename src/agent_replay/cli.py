@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import json as json_mod
+import re
 from pathlib import Path
 
 import click
 from rich.console import Console
 
+from . import __version__
 from .diff import diff_traces
 from .exporters import export_html, export_json
+from .redact import redact_trace
 from .replay import ReplayEngine
 from .trace import EventType, Trace
 from .viewer import TraceViewer
@@ -18,7 +21,7 @@ console = Console()
 
 
 @click.group()
-@click.version_option(package_name="agent-trace-replay", prog_name="agent-replay")
+@click.version_option(version=__version__, prog_name="agent-replay")
 def cli() -> None:
     """Record, replay, and debug AI agent execution traces."""
 
@@ -108,7 +111,7 @@ def info(trace_file: Path) -> None:
     console.print(f"[bold]{trace.name}[/bold] ({trace.trace_id})")
     console.print(f"  Spans:    {len(trace.spans)}")
     console.print(f"  Events:   {trace.event_count}")
-    duration = f"{trace.duration:.3f}s" if trace.duration else "N/A"
+    duration = f"{trace.duration:.3f}s" if trace.duration is not None else "N/A"
     console.print(f"  Duration: {duration}")
     console.print(f"  Metadata: {trace.metadata}")
 
@@ -162,7 +165,7 @@ def stats(trace_file: Path, as_json: bool) -> None:
         return
 
     console.print(f"\n[bold cyan]Stats: {trace.name}[/bold cyan]")
-    duration = f"{trace.duration:.3f}s" if trace.duration else "N/A"
+    duration = f"{trace.duration:.3f}s" if trace.duration is not None else "N/A"
     console.print(f"  Duration:     {duration}")
     console.print(f"  Spans:        {len(trace.spans)}")
     console.print(f"  Total events: {len(events)}")
@@ -186,6 +189,58 @@ def stats(trace_file: Path, as_json: bool) -> None:
         for name, dur in span_durations.items():
             dur_str = f"{dur:.3f}s" if dur is not None else "open"
             console.print(f"  {name:<30} {dur_str}")
+
+
+@cli.command()
+@click.argument("trace_file", type=click.Path(exists=True, path_type=Path))
+@click.option("--output", "-o", type=click.Path(path_type=Path), help="Output file path.")
+@click.option(
+    "--pattern",
+    "-p",
+    "patterns",
+    multiple=True,
+    help="Extra redaction rule as LABEL=REGEX (repeatable).",
+)
+@click.option("--placeholder", default="[REDACTED:{label}]", show_default=True,
+              help="Replacement text, may contain {label}.")
+def redact(trace_file: Path, output: Path | None, patterns: tuple[str, ...], placeholder: str) -> None:
+    """Scrub API keys, tokens, and emails from a trace file.
+
+    Writes a redacted copy so the trace can be shared safely.
+    Builtin rules cover OpenAI, Anthropic, AWS, and GitHub keys,
+    bearer tokens, and email addresses.
+    """
+    extra: dict[str, str] = {}
+    for spec in patterns:
+        label, sep, regex = spec.partition("=")
+        if not sep or not label or not regex:
+            raise click.BadParameter(
+                f"'{spec}' is not LABEL=REGEX", param_hint="--pattern"
+            )
+        try:
+            re.compile(regex)
+        except re.error as exc:
+            raise click.BadParameter(
+                f"invalid regex for '{label}': {exc}", param_hint="--pattern"
+            ) from exc
+        extra[label] = regex
+
+    trace = Trace.load(trace_file)
+    redacted_trace, counts = redact_trace(trace, extra_patterns=extra, placeholder=placeholder)
+
+    if output is None:
+        output = trace_file.with_suffix(".redacted.jsonl")
+    redacted_trace.save(output)
+
+    total = sum(counts.values())
+    if total == 0:
+        console.print(f"[green]No sensitive data found. Clean copy written to {output}[/green]")
+        return
+
+    console.print(f"[bold cyan]Redacted {total} match(es):[/bold cyan]")
+    for label, n in sorted(counts.items()):
+        console.print(f"  {label:<20} {n:>5}")
+    console.print(f"[green]Redacted trace written to {output}[/green]")
 
 
 @cli.command()

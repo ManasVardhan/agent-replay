@@ -204,6 +204,39 @@ for div in result.divergences:
     print(f"[{div.severity}] Position {div.position}: {div.description}")
 ```
 
+## Redaction
+
+Scrub API keys, tokens, and emails from a trace before sharing it in a bug report or public repo:
+
+```bash
+agent-replay redact trace.jsonl
+```
+
+```
+Redacted 3 match(es):
+  bearer_token             1
+  email                    1
+  openai_key               1
+Redacted trace written to trace.redacted.jsonl
+```
+
+Builtin rules cover OpenAI, Anthropic, AWS, and GitHub keys, bearer tokens, and email addresses. Add custom rules with repeatable `--pattern LABEL=REGEX` options:
+
+```bash
+agent-replay redact trace.jsonl -p "ssn=\d{3}-\d{2}-\d{4}" -o clean.jsonl
+```
+
+Programmatic redaction:
+
+```python
+from agent_replay import Trace, redact_trace
+
+trace = Trace.load("trace.jsonl")
+clean, counts = redact_trace(trace, extra_patterns={"acme_id": r"ACME-\d+"})
+clean.save("trace.redacted.jsonl")
+print(counts)  # {"openai_key": 1, "email": 2, ...}
+```
+
 ## HTML Export
 
 Generate a self-contained HTML timeline:
