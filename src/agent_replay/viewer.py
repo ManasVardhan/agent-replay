@@ -10,7 +10,7 @@ from rich.tree import Tree
 
 from .diff import DiffResult
 from .replay import ReplayEngine
-from .trace import EventType, Span, Trace
+from .trace import Event, EventType, Span, Trace
 
 # Color mapping for event types
 EVENT_COLORS: dict[EventType, str] = {
@@ -149,6 +149,45 @@ class TraceViewer:
                 )
 
             self.console.print(table)
+
+    def _event_summary(self, event: Event) -> str:
+        """Return a compact one-line plain-text summary of an event's data."""
+        data = event.data
+        if event.event_type == EventType.LLM_REQUEST:
+            model = data.get("model", "")
+            n_msgs = len(data.get("messages", []))
+            return f"model={model} messages={n_msgs}"
+        if event.event_type == EventType.LLM_RESPONSE:
+            content = str(data.get("content", ""))
+            preview = content[:80] + "..." if len(content) > 80 else content
+            tokens = data.get("tokens")
+            tok_str = f" ({tokens} tokens)" if tokens else ""
+            return f'"{preview}"{tok_str}'
+        if event.event_type == EventType.TOOL_CALL:
+            return f"{data.get('tool', '')}({data.get('args', {})})"
+        if event.event_type == EventType.TOOL_RESULT:
+            result = str(data.get("result", ""))
+            preview = result[:60] + "..." if len(result) > 60 else result
+            return f"{data.get('tool', '')} -> {preview}"
+        if event.event_type == EventType.DECISION:
+            return f"{data.get('description', '')} -> {data.get('choice', '')}"
+        if event.event_type == EventType.ERROR:
+            return str(data.get("message", ""))
+        return str(data.get("message", str(data)[:80]))
+
+    def show_play_step(
+        self, index: int, total: int, elapsed: float, span: Span, event: Event
+    ) -> None:
+        """Render one step of a timed playback."""
+        icon = EVENT_ICONS.get(event.event_type, "?")
+        color = EVENT_COLORS.get(event.event_type, "white")
+        summary = self._event_summary(event)
+        self.console.print(
+            f"[dim][{index}/{total}] +{elapsed:8.3f}s[/dim] "
+            f"[yellow]{span.name}[/yellow] "
+            f"{icon} [{color}]{event.event_type.value}[/{color}] "
+            f"[dim]{summary}[/dim]"
+        )
 
     def show_step(self, engine: ReplayEngine) -> None:
         """Show the current step in a replay."""

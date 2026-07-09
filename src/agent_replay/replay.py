@@ -16,6 +16,23 @@ class ReplayState:
     paused: bool = True
 
 
+@dataclass
+class PlaybackStep:
+    """One step of a timed playback: how long to wait, then what to show.
+
+    Attributes
+    ----------
+    delay : seconds to pause before showing this event (already speed-adjusted)
+    elapsed : seconds since the first event in the original trace timeline
+    span : the span the event belongs to
+    event : the event itself
+    """
+    delay: float
+    elapsed: float
+    span: Span
+    event: Event
+
+
 class ReplayEngine:
     """Step-through replay of a recorded trace.
 
@@ -98,6 +115,52 @@ class ReplayEngine:
             return []
         current_span = self._flat[min(self._position, len(self._flat) - 1)][0]
         return [(s, e) for s, e in self._flat if s.span_id == current_span.span_id]
+
+    def playback_plan(
+        self,
+        speed: float = 1.0,
+        max_delay: float | None = None,
+    ) -> list[PlaybackStep]:
+        """Build a timed playback plan preserving the trace's original pacing.
+
+        Parameters
+        ----------
+        speed : playback speed multiplier; 2.0 plays twice as fast. Must be > 0.
+        max_delay : optional cap in seconds for the pause before each event,
+                    applied after speed adjustment. Useful for traces with
+                    long idle gaps. Must be >= 0 when given.
+
+        Returns
+        -------
+        List of PlaybackStep in timestamp order. The first step always has
+        delay 0.0. Negative timestamp gaps are clamped to 0.
+        """
+        if speed <= 0:
+            raise ValueError(f"speed must be > 0, got {speed}")
+        if max_delay is not None and max_delay < 0:
+            raise ValueError(f"max_delay must be >= 0, got {max_delay}")
+
+        steps: list[PlaybackStep] = []
+        if not self._flat:
+            return steps
+
+        first_ts = self._flat[0][1].timestamp
+        prev_ts = first_ts
+        for span, event in self._flat:
+            gap = max(0.0, event.timestamp - prev_ts)
+            delay = gap / speed
+            if max_delay is not None:
+                delay = min(delay, max_delay)
+            steps.append(
+                PlaybackStep(
+                    delay=delay,
+                    elapsed=max(0.0, event.timestamp - first_ts),
+                    span=span,
+                    event=event,
+                )
+            )
+            prev_ts = event.timestamp
+        return steps
 
     def search(self, query: str) -> list[int]:
         """Find positions where event data contains the query string."""

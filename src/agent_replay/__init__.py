@@ -4,7 +4,7 @@ __version__ = "0.1.1"
 
 from .recorder import Recorder, record_trace
 from .trace import Event, EventType, Span, Trace
-from .replay import ReplayEngine
+from .replay import PlaybackStep, ReplayEngine
 from .diff import diff_traces, DiffResult, Divergence
 from .exporters import export_html, export_json
 from .redact import redact_trace, BUILTIN_PATTERNS
@@ -16,6 +16,7 @@ __all__ = [
     "EventType",
     "Span",
     "Trace",
+    "PlaybackStep",
     "ReplayEngine",
     "diff_traces",
     "DiffResult",

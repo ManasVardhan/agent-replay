@@ -166,6 +166,34 @@ while engine.has_next():
     print(f"[{span.name}] {event.event_type.value}")
 ```
 
+### Streaming Playback
+
+Watch a trace unfold with its original timing, like a terminal screencast.
+Great for demos, debugging, and onboarding:
+
+```bash
+# Real-time pacing (long gaps capped at 2s by default)
+agent-replay play trace.jsonl
+
+# Twice as fast, cap pauses at half a second
+agent-replay play trace.jsonl --speed 2 --max-delay 0.5
+
+# Dump the timeline instantly, no pauses
+agent-replay play trace.jsonl --no-delay
+```
+
+Each line shows the step number, elapsed trace time, span, event type,
+and a compact summary:
+
+```
+[3/12] +   1.204s agent-loop 🔧 tool_call search({'q': 'weather SF'})
+[4/12] +   2.891s agent-loop 📦 tool_result search -> {'temp': 61}
+```
+
+Press Ctrl+C to stop playback early. Programmatic access via
+`engine.playback_plan(speed=2.0, max_delay=1.0)`, which returns
+`PlaybackStep` objects with speed-adjusted delays and elapsed times.
+
 ## Diffing
 
 Compare two traces to find where agent behavior diverged:

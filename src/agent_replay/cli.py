@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json as json_mod
 import re
+import time
 from pathlib import Path
 
 import click
@@ -71,6 +72,63 @@ def replay(trace_file: Path) -> None:
                 console.print("[red]Usage: j <position>[/red]")
         else:
             console.print("[dim]Unknown command[/dim]")
+
+
+@cli.command()
+@click.argument("trace_file", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--speed",
+    "-s",
+    type=float,
+    default=1.0,
+    show_default=True,
+    help="Playback speed multiplier; 2.0 plays twice as fast.",
+)
+@click.option(
+    "--max-delay",
+    type=float,
+    default=2.0,
+    show_default=True,
+    help="Cap each pause at this many seconds (after speed adjustment).",
+)
+@click.option("--no-delay", is_flag=True, help="Print every step instantly, no pauses.")
+def play(trace_file: Path, speed: float, max_delay: float, no_delay: bool) -> None:
+    """Replay a trace in the terminal with its original timing.
+
+    Streams events in timestamp order, pausing between them to mirror
+    the recorded pacing. Great for demos, debugging, and onboarding.
+    Press Ctrl+C to stop playback early.
+    """
+    if speed <= 0:
+        raise click.BadParameter("must be > 0", param_hint="--speed")
+    if max_delay < 0:
+        raise click.BadParameter("must be >= 0", param_hint="--max-delay")
+
+    engine = ReplayEngine.from_file(trace_file)
+    plan = engine.playback_plan(speed=speed, max_delay=max_delay)
+    if not plan:
+        console.print("[dim]Trace has no events to play.[/dim]")
+        return
+
+    viewer = TraceViewer(console)
+    total = len(plan)
+    trace_span = plan[-1].elapsed
+    console.print(f"[bold cyan]Playing: {engine.trace.name}[/bold cyan]")
+    speed_note = "instant" if no_delay else f"speed {speed:g}x, pauses capped at {max_delay:g}s"
+    console.print(f"[dim]{total} events over {trace_span:.3f}s ({speed_note})[/dim]\n")
+
+    played = 0
+    try:
+        for i, step in enumerate(plan, 1):
+            if not no_delay and step.delay > 0:
+                time.sleep(step.delay)
+            viewer.show_play_step(i, total, step.elapsed, step.span, step.event)
+            played += 1
+    except KeyboardInterrupt:
+        console.print(f"\n[yellow]Playback interrupted at {played}/{total} events.[/yellow]")
+        return
+
+    console.print(f"\n[green]Played {played} events (trace span {trace_span:.3f}s).[/green]")
 
 
 @cli.command()
