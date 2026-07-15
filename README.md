@@ -19,6 +19,7 @@ Record every LLM call, tool use, decision point, and state change during agent e
 - 🔍 **Diff** two traces to find divergence points
 - 🌳 **Tree view** of nested spans and events
 - 📊 **HTML export** with a self-contained dark-mode timeline
+- 📡 **OpenTelemetry export** (OTLP/JSON) for Jaeger, Tempo, and friends
 - 🧩 **Structured traces** with spans, events, and metadata
 - ⌨️ **CLI** for quick inspection without writing code
 - 🐍 **Typed Python 3.10+** with zero heavy dependencies
@@ -29,6 +30,7 @@ Record every LLM call, tool use, decision point, and state change during agent e
 Agent Run ──> Recorder ──> Trace File (.jsonl) ──> Replay Viewer
                                                  ──> Diff Tool
                                                  ──> HTML Export
+                                                 ──> OTLP Export
 ```
 
 ```
@@ -274,6 +276,41 @@ agent-replay export trace.jsonl --format html -o timeline.html
 ```
 
 The HTML file uses a dark theme with color-coded event types and expandable data sections. No external dependencies needed to view it.
+
+## OpenTelemetry Export
+
+Convert any trace to OTLP/JSON, the standard OpenTelemetry wire format, so it can be ingested by Jaeger, Grafana Tempo, Honeycomb, or any OTEL-compatible backend. No OpenTelemetry SDK required.
+
+```bash
+agent-replay export trace.jsonl --format otlp            # writes trace.otlp.json
+agent-replay export trace.jsonl --format otlp -o out.json
+```
+
+Or programmatically:
+
+```python
+from agent_replay import Trace, to_otlp, export_otlp
+
+trace = Trace.load("trace.jsonl")
+doc = to_otlp(trace)                      # OTLP dict, ready to POST to a collector
+export_otlp(trace, "trace.otlp.json")     # or write straight to a file
+```
+
+Mapping details:
+
+- Spans become OTLP spans (ids padded to OTLP lengths, parent links preserved)
+- Events become OTLP span events with typed attributes
+- Trace and span metadata become resource and span attributes
+- Spans containing an `error` event get `STATUS_CODE_ERROR`
+- The original agent-replay trace id is kept in the `agent_replay.trace_id` resource attribute
+
+Send the result to a local collector with plain curl:
+
+```bash
+curl -X POST http://localhost:4318/v1/traces \
+  -H "Content-Type: application/json" \
+  --data-binary @trace.otlp.json
+```
 
 ## Configuration
 

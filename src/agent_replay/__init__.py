@@ -7,6 +7,7 @@ from .trace import Event, EventType, Span, Trace
 from .replay import PlaybackStep, ReplayEngine
 from .diff import diff_traces, DiffResult, Divergence
 from .exporters import export_html, export_json
+from .otel import export_otlp, to_otlp
 from .redact import redact_trace, BUILTIN_PATTERNS
 
 __all__ = [
@@ -23,6 +24,8 @@ __all__ = [
     "Divergence",
     "export_html",
     "export_json",
+    "export_otlp",
+    "to_otlp",
     "redact_trace",
     "BUILTIN_PATTERNS",
 ]

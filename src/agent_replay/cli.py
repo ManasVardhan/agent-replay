@@ -13,6 +13,7 @@ from rich.console import Console
 from . import __version__
 from .diff import diff_traces
 from .exporters import export_html, export_json
+from .otel import export_otlp
 from .redact import redact_trace
 from .replay import ReplayEngine
 from .trace import EventType, Trace
@@ -145,16 +146,25 @@ def diff(trace_a: Path, trace_b: Path) -> None:
 
 @cli.command()
 @click.argument("trace_file", type=click.Path(exists=True, path_type=Path))
-@click.option("--format", "fmt", type=click.Choice(["json", "html"]), default="json", help="Export format.")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "html", "otlp"]),
+    default="json",
+    help="Export format (otlp = OpenTelemetry OTLP/JSON).",
+)
 @click.option("--output", "-o", type=click.Path(path_type=Path), help="Output file path.")
 def export(trace_file: Path, fmt: str, output: Path | None) -> None:
-    """Export a trace to JSON or HTML."""
+    """Export a trace to JSON, HTML, or OpenTelemetry OTLP/JSON."""
     trace = Trace.load(trace_file)
     if output is None:
-        output = trace_file.with_suffix(f".{fmt}")
+        suffix = ".otlp.json" if fmt == "otlp" else f".{fmt}"
+        output = trace_file.with_suffix(suffix)
 
     if fmt == "json":
         export_json(trace, output)
+    elif fmt == "otlp":
+        export_otlp(trace, output)
     else:
         export_html(trace, output)
 
