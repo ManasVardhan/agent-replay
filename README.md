@@ -16,7 +16,7 @@ Record every LLM call, tool use, decision point, and state change during agent e
 
 - 🎬 **Record** agent runs with a simple context manager or decorator
 - ⏯️ **Replay** traces step-by-step in the terminal
-- 🔍 **Diff** two traces to find divergence points
+- 🔍 **Diff** two traces to find divergence points, with side-by-side HTML comparison reports
 - 🌳 **Tree view** of nested spans and events
 - 📊 **HTML export** with a self-contained dark-mode timeline
 - 📡 **OpenTelemetry export** (OTLP/JSON) for Jaeger, Tempo, and friends
@@ -233,6 +233,24 @@ result = diff_traces(a, b)
 for div in result.divergences:
     print(f"[{div.severity}] Position {div.position}: {div.description}")
 ```
+
+### Side-by-Side HTML Comparison
+
+Generate a shareable side-by-side comparison report, great for reviewing regressions after a prompt change:
+
+```bash
+agent-replay diff before.jsonl after.jsonl --html comparison.html --title "Prompt v2 check"
+```
+
+The report is a single self-contained HTML file (inline CSS, no JavaScript, no external assets) that aligns both event streams column by column and highlights every divergence: critical rows in red, warnings in yellow, informational differences in blue, each with the diff description underneath.
+
+Machine-readable output for CI pipelines:
+
+```bash
+agent-replay diff before.jsonl after.jsonl --json-output
+```
+
+Programmatic access via `render_diff_html(trace_a, trace_b)` (returns the HTML string) and `export_diff_html(trace_a, trace_b, "report.html")`.
 
 ## Redaction
 

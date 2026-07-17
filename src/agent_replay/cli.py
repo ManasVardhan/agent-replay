@@ -12,6 +12,7 @@ from rich.console import Console
 
 from . import __version__
 from .diff import diff_traces
+from .diff_html import export_diff_html
 from .exporters import export_html, export_json
 from .otel import export_otlp
 from .redact import redact_trace
@@ -135,13 +136,42 @@ def play(trace_file: Path, speed: float, max_delay: float, no_delay: bool) -> No
 @cli.command()
 @click.argument("trace_a", type=click.Path(exists=True, path_type=Path))
 @click.argument("trace_b", type=click.Path(exists=True, path_type=Path))
-def diff(trace_a: Path, trace_b: Path) -> None:
-    """Compare two trace files and show divergences."""
+@click.option(
+    "--html",
+    "html_output",
+    type=click.Path(path_type=Path),
+    help="Also write a side-by-side HTML comparison report to this file.",
+)
+@click.option("--title", default="Trace Comparison", show_default=True,
+              help="Title for the HTML report.")
+@click.option("--json-output", "as_json", is_flag=True, help="Output the diff as JSON.")
+def diff(
+    trace_a: Path,
+    trace_b: Path,
+    html_output: Path | None,
+    title: str,
+    as_json: bool,
+) -> None:
+    """Compare two trace files and show divergences.
+
+    Use --html report.html to get a shareable side-by-side comparison
+    view with every divergence highlighted.
+    """
     a = Trace.load(trace_a)
     b = Trace.load(trace_b)
     result = diff_traces(a, b)
-    viewer = TraceViewer(console)
-    viewer.show_diff(result)
+
+    if as_json:
+        # click.echo, not console.print: rich soft-wraps long lines, which
+        # would inject newlines inside JSON strings and corrupt the output.
+        click.echo(json_mod.dumps(result.to_dict(), indent=2, default=str))
+    else:
+        viewer = TraceViewer(console)
+        viewer.show_diff(result)
+
+    if html_output is not None:
+        export_diff_html(a, b, html_output, result=result, title=title)
+        console.print(f"[green]HTML comparison written to {html_output}[/green]")
 
 
 @cli.command()
@@ -229,7 +259,9 @@ def stats(trace_file: Path, as_json: bool) -> None:
             "event_type_counts": type_counts,
             "span_durations": span_durations,
         }
-        console.print(json_mod.dumps(data, indent=2, default=str))
+        # click.echo, not console.print: rich soft-wraps long lines, which
+        # would inject newlines inside JSON strings and corrupt the output.
+        click.echo(json_mod.dumps(data, indent=2, default=str))
         return
 
     console.print(f"\n[bold cyan]Stats: {trace.name}[/bold cyan]")
