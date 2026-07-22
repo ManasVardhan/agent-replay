@@ -15,6 +15,7 @@ Record every LLM call, tool use, decision point, and state change during agent e
 ## Features
 
 - 🎬 **Record** agent runs with a simple context manager or decorator
+- 🔗 **LangChain integration** - capture traces automatically with a callback handler
 - ⏯️ **Replay** traces step-by-step in the terminal
 - 🔍 **Diff** two traces to find divergence points, with side-by-side HTML comparison reports
 - 🌳 **Tree view** of nested spans and events
@@ -129,6 +130,33 @@ def run_agent(task: str, recorder: Recorder = None):
         recorder.llm_request(model="gpt-4")
         recorder.llm_response(content="done")
 ```
+
+### LangChain Integration
+
+No manual instrumentation needed: attach the callback handler to any
+LangChain runnable, chain, agent, or LLM and the full run is captured
+automatically. Chain runs become nested spans; LLM requests/responses
+(with token usage), tool calls/results, agent decisions, and errors
+become events.
+
+```bash
+pip install "agent-trace-replay[langchain]"  # pulls in langchain-core
+```
+
+```python
+from agent_replay.integrations.langchain import AgentReplayCallbackHandler
+
+handler = AgentReplayCallbackHandler("support-agent")
+chain.invoke({"question": "..."}, config={"callbacks": [handler]})
+agent_executor.invoke({"input": "..."}, config={"callbacks": [handler]})
+
+trace = handler.finish("trace.jsonl")  # close spans and save
+```
+
+The saved trace works with every agent-replay feature: `show`, `tree`,
+`play`, `diff`, `redact`, HTML export, and OTLP export. Long payloads are
+truncated at 500 characters and unknown callback shapes are handled
+defensively, so the handler never breaks a run.
 
 ### Event Types
 

@@ -32,6 +32,9 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
 ]
+langchain = [
+    "langchain-core>=0.2",
+]
 
 [project.scripts]
 agent-replay = "agent_replay.cli:cli"
@@ -48,3 +51,7 @@ packages = ["src/agent_replay"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[[tool.mypy.overrides]]
+module = "langchain_core.*"
+ignore_missing_imports = true

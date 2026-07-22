@@ -11,12 +11,15 @@ Export traces in OpenTelemetry OTLP/JSON format for integration with Jaeger, Gra
 ### 🔀 Trace Comparison UI
 Side-by-side diff view to compare two agent runs, highlighting where decisions diverged. Useful for regression testing prompt changes. Shipped as `diff --html report.html` (plus `--title` and `--json-output`) backed by `render_diff_html()` / `export_diff_html()`: a self-contained HTML report with aligned event columns and severity-highlighted divergences.
 
+### 🔗 LangChain Integration
+Native callbacks so LangChain agent traces are captured automatically without manual instrumentation. Shipped as `AgentReplayCallbackHandler` in `agent_replay.integrations.langchain` (optional `[langchain]` extra): chain runs become nested spans, LLM requests/responses with token usage, tool calls/results, agent decisions, and errors become events, and `finish(path)` saves a trace compatible with every CLI command.
+
 ---
 
 ## v0.2 (Planned)
 
-### 🔗 LangChain / LlamaIndex Integration
-Native callbacks and hooks for LangChain and LlamaIndex so agent traces are captured automatically without manual instrumentation.
+### 🦙 LlamaIndex Integration
+Native hooks for LlamaIndex so query and agent traces are captured automatically, matching the LangChain integration.
 
 ---
 
