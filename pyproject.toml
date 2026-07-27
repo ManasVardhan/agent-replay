@@ -35,6 +35,9 @@ dev = [
 langchain = [
     "langchain-core>=0.2",
 ]
+llamaindex = [
+    "llama-index-core>=0.10",
+]
 
 [project.scripts]
 agent-replay = "agent_replay.cli:cli"
@@ -54,4 +57,8 @@ testpaths = ["tests"]
 
 [[tool.mypy.overrides]]
 module = "langchain_core.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "llama_index.*"
 ignore_missing_imports = true

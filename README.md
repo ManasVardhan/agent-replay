@@ -16,6 +16,7 @@ Record every LLM call, tool use, decision point, and state change during agent e
 
 - 🎬 **Record** agent runs with a simple context manager or decorator
 - 🔗 **LangChain integration** - capture traces automatically with a callback handler
+- 🦙 **LlamaIndex integration** - record queries, retrievals, and agent steps automatically
 - ⏯️ **Replay** traces step-by-step in the terminal
 - 🔍 **Diff** two traces to find divergence points, with side-by-side HTML comparison reports
 - 🌳 **Tree view** of nested spans and events
@@ -157,6 +158,36 @@ The saved trace works with every agent-replay feature: `show`, `tree`,
 `play`, `diff`, `redact`, HTML export, and OTLP export. Long payloads are
 truncated at 500 characters and unknown callback shapes are handled
 defensively, so the handler never breaks a run.
+
+### LlamaIndex Integration
+
+Register the handler with LlamaIndex's callback manager and every query,
+retrieval, synthesis, sub-question, and agent step is recorded as a
+nested span. LLM requests/responses (with token usage), tool calls and
+results, embeddings, and exceptions become events on the span they
+belong to.
+
+```bash
+pip install "agent-trace-replay[llamaindex]"  # pulls in llama-index-core
+```
+
+```python
+from llama_index.core import Settings
+from llama_index.core.callbacks import CallbackManager
+from agent_replay.integrations.llamaindex import AgentReplayLlamaIndexHandler
+
+handler = AgentReplayLlamaIndexHandler("rag-pipeline")
+Settings.callback_manager = CallbackManager([handler])
+
+query_engine = index.as_query_engine()
+response = query_engine.query("What changed in Q3?")
+
+trace = handler.finish("trace.jsonl")  # close spans and save
+```
+
+Like the LangChain handler, it uses the same defensive payload handling,
+so odd shapes never break a run, and the saved trace works with every
+CLI command.
 
 ### Event Types
 

@@ -14,12 +14,15 @@ Side-by-side diff view to compare two agent runs, highlighting where decisions d
 ### 🔗 LangChain Integration
 Native callbacks so LangChain agent traces are captured automatically without manual instrumentation. Shipped as `AgentReplayCallbackHandler` in `agent_replay.integrations.langchain` (optional `[langchain]` extra): chain runs become nested spans, LLM requests/responses with token usage, tool calls/results, agent decisions, and errors become events, and `finish(path)` saves a trace compatible with every CLI command.
 
+### 🦙 LlamaIndex Integration
+Native hooks for LlamaIndex so query and agent traces are captured automatically, matching the LangChain integration. Shipped as `AgentReplayLlamaIndexHandler` in `agent_replay.integrations.llamaindex` (optional `[llamaindex]` extra): query, retrieval, synthesis, sub-question, tree, and agent-step events become nested spans; LLM requests/responses with token usage, tool calls/results, embeddings, and exceptions become events; `finish(path)` saves a trace compatible with every CLI command.
+
 ---
 
 ## v0.2 (Planned)
 
-### 🦙 LlamaIndex Integration
-Native hooks for LlamaIndex so query and agent traces are captured automatically, matching the LangChain integration.
+### 📊 Trace Cost Analytics
+Per-span and per-model token and cost breakdowns computed from recorded LLM events, with a `cost` CLI command.
 
 ---
 
