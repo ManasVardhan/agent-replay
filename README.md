@@ -10,7 +10,7 @@
 
 **AI agents are black boxes. agent-replay makes them transparent.**
 
-Record every LLM call, tool use, decision point, and state change during agent execution. Replay them step-by-step. Diff two runs to find exactly where behavior diverged.
+Record every LLM call, tool use, decision point, and state change during agent execution. Replay them step-by-step. Differentiate between two runs to find exactly where behavior diverged.
 
 ## Features
 
