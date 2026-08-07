@@ -17,12 +17,15 @@ Native callbacks so LangChain agent traces are captured automatically without ma
 ### 🦙 LlamaIndex Integration
 Native hooks for LlamaIndex so query and agent traces are captured automatically, matching the LangChain integration. Shipped as `AgentReplayLlamaIndexHandler` in `agent_replay.integrations.llamaindex` (optional `[llamaindex]` extra): query, retrieval, synthesis, sub-question, tree, and agent-step events become nested spans; LLM requests/responses with token usage, tool calls/results, embeddings, and exceptions become events; `finish(path)` saves a trace compatible with every CLI command.
 
+### 💰 Trace Cost Analytics
+Per-span and per-model token and cost breakdowns computed from recorded LLM events. Shipped as the `cost` CLI command backed by `analyze_trace()` / `CostReport`: exact input/output pricing for `token_usage` dicts (LangChain and LlamaIndex traces), average-rate estimates for bare token totals (marked `~`), a built-in per-1M-token table for common OpenAI, Anthropic, and Google models with prefix matching for versioned names, repeatable `--price MODEL=INPUT:OUTPUT` overrides, `--json-output`, and clear reporting of unpriced models and responses without usage data.
+
 ---
 
 ## v0.2 (Planned)
 
-### 📊 Trace Cost Analytics
-Per-span and per-model token and cost breakdowns computed from recorded LLM events, with a `cost` CLI command.
+### 🌐 Trace Server
+A tiny local web server (`agent-replay serve traces/`) that lists saved traces and renders the HTML timeline, diff, and cost views in the browser, so a team can browse a directory of agent runs without exporting files one by one.
 
 ---
 

@@ -20,6 +20,7 @@ Record every LLM call, tool use, decision point, and state change during agent e
 - ⏯️ **Replay** traces step-by-step in the terminal
 - 🔍 **Diff** two traces to find divergence points, with side-by-side HTML comparison reports
 - 🌳 **Tree view** of nested spans and events
+- 💰 **Cost analytics** - per-model and per-span token and cost breakdowns with a `cost` command
 - 📊 **HTML export** with a self-contained dark-mode timeline
 - 📡 **OpenTelemetry export** (OTLP/JSON) for Jaeger, Tempo, and friends
 - 🧩 **Structured traces** with spans, events, and metadata
@@ -310,6 +311,60 @@ agent-replay diff before.jsonl after.jsonl --json-output
 ```
 
 Programmatic access via `render_diff_html(trace_a, trace_b)` (returns the HTML string) and `export_diff_html(trace_a, trace_b, "report.html")`.
+
+## Cost Analytics
+
+See what a trace cost you, per model and per span:
+
+```bash
+agent-replay cost trace.jsonl
+```
+
+```
+Cost: research-agent
+  LLM calls:    4
+  Total tokens: 16,300
+  Total cost:   $0.050125
+
+              Cost by Model
+Model        Calls  Prompt  Completion  Tokens        Cost
+gpt-4o           2  10,000       2,400  12,400   $0.049000
+gpt-4o-mini      1       0           0   3,000  ~$0.001125
+local-llama      1       0           0     900         n/a
+
+     Cost by Span
+Span       Calls  Tokens       Cost
+plan           1   6,200  $0.024500
+research       1   6,200  $0.024500
+summarize      1   3,000  $0.001125
+local          1     900        n/a
+```
+
+Costs come from token usage recorded in `llm_response` events. Traces from the
+LangChain and LlamaIndex integrations carry full `token_usage` dicts and get
+exact input/output pricing; hand-recorded traces with only a `tokens` total
+get an estimate at the average of the model's input and output rates (marked
+with `~`). The built-in table covers common OpenAI, Anthropic, and Google
+models, and versioned names like `gpt-4o-2024-08-06` match by prefix.
+
+Price local or fine-tuned models with repeatable `--price` overrides (USD per
+1M tokens), and use `--json-output` for scripting:
+
+```bash
+agent-replay cost trace.jsonl --price my-llama=0.10:0.25
+agent-replay cost trace.jsonl --json-output
+```
+
+Programmatic access:
+
+```python
+from agent_replay import Trace, analyze_trace
+
+report = analyze_trace(Trace.load("trace.jsonl"))
+print(report.total_cost_usd, report.total_tokens)
+print(report.by_model())  # sorted by cost, descending
+print(report.by_span())
+```
 
 ## Redaction
 

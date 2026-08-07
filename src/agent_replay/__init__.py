@@ -2,6 +2,7 @@
 
 __version__ = "0.1.1"
 
+from .cost import CostReport, LLMCall, analyze_trace, resolve_pricing
 from .recorder import Recorder, record_trace
 from .trace import Event, EventType, Span, Trace
 from .replay import PlaybackStep, ReplayEngine
@@ -31,4 +32,8 @@ __all__ = [
     "to_otlp",
     "redact_trace",
     "BUILTIN_PATTERNS",
+    "CostReport",
+    "LLMCall",
+    "analyze_trace",
+    "resolve_pricing",
 ]

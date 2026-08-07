@@ -293,6 +293,119 @@ def stats(trace_file: Path, as_json: bool) -> None:
 
 @cli.command()
 @click.argument("trace_file", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--price",
+    "prices",
+    multiple=True,
+    help="Pricing override as MODEL=INPUT:OUTPUT in USD per 1M tokens (repeatable).",
+)
+@click.option("--json-output", "as_json", is_flag=True, help="Output as JSON.")
+def cost(trace_file: Path, prices: tuple[str, ...], as_json: bool) -> None:
+    """Show token and cost breakdowns for a trace's LLM calls.
+
+    Prices token usage recorded in llm_response events (token_usage dicts or
+    bare token totals) against a built-in per-1M-token table covering common
+    OpenAI, Anthropic, and Google models. Versioned names match by prefix.
+    Use --price to add or override pricing, for example:
+
+        agent-replay cost trace.jsonl --price my-model=1.50:6.00
+    """
+    from .cost import analyze_trace
+
+    overrides: dict[str, tuple[float, float]] = {}
+    for spec in prices:
+        model, sep, price_part = spec.partition("=")
+        input_str, price_sep, output_str = price_part.partition(":")
+        if not sep or not model or not price_sep:
+            raise click.BadParameter(f"'{spec}' is not MODEL=INPUT:OUTPUT", param_hint="--price")
+        try:
+            input_price, output_price = float(input_str), float(output_str)
+        except ValueError as exc:
+            raise click.BadParameter(
+                f"invalid prices for '{model}': {price_part}", param_hint="--price"
+            ) from exc
+        if input_price < 0 or output_price < 0:
+            raise click.BadParameter(
+                f"prices must be non-negative for '{model}'", param_hint="--price"
+            )
+        overrides[model] = (input_price, output_price)
+
+    trace = Trace.load(trace_file)
+    report = analyze_trace(trace, pricing=overrides or None)
+
+    if as_json:
+        click.echo(json_mod.dumps(report.to_dict(), indent=2))
+        return
+
+    console.print(f"\n[bold cyan]Cost: {report.trace_name}[/bold cyan]")
+    if not report.calls:
+        console.print("[dim]No LLM calls with token usage found in this trace.[/dim]")
+        if report.calls_without_usage:
+            console.print(
+                f"[dim]{report.calls_without_usage} llm_response event(s) "
+                f"had no token usage data.[/dim]"
+            )
+        return
+
+    console.print(f"  LLM calls:    {len(report.calls)}")
+    console.print(f"  Total tokens: {report.total_tokens:,}")
+    console.print(f"  Total cost:   ${report.total_cost_usd:.6f}")
+
+    from rich.table import Table
+
+    model_table = Table(title="Cost by Model")
+    model_table.add_column("Model", style="yellow")
+    model_table.add_column("Calls", justify="right")
+    model_table.add_column("Prompt", justify="right")
+    model_table.add_column("Completion", justify="right")
+    model_table.add_column("Tokens", justify="right")
+    model_table.add_column("Cost", justify="right")
+    for row in report.by_model():
+        cost_str = f"${row['cost_usd']:.6f}" if row["cost_usd"] is not None else "n/a"
+        if row["estimated"]:
+            cost_str = f"~{cost_str}"
+        model_table.add_row(
+            row["model"],
+            str(row["calls"]),
+            f"{row['prompt_tokens']:,}",
+            f"{row['completion_tokens']:,}",
+            f"{row['total_tokens']:,}",
+            cost_str,
+        )
+    console.print(model_table)
+
+    span_table = Table(title="Cost by Span")
+    span_table.add_column("Span", style="cyan")
+    span_table.add_column("Calls", justify="right")
+    span_table.add_column("Tokens", justify="right")
+    span_table.add_column("Cost", justify="right")
+    for row in report.by_span():
+        cost_str = f"${row['cost_usd']:.6f}" if row["cost_usd"] is not None else "n/a"
+        span_table.add_row(
+            row["span_name"], str(row["calls"]), f"{row['total_tokens']:,}", cost_str
+        )
+    console.print(span_table)
+
+    if report.has_estimates:
+        console.print(
+            "[dim]~ = estimated: only a token total was recorded, priced at the "
+            "average of input and output rates.[/dim]"
+        )
+    if report.unpriced_models:
+        models_str = ", ".join(report.unpriced_models)
+        console.print(
+            f"[yellow]No pricing for: {models_str}. "
+            f"Add it with --price MODEL=INPUT:OUTPUT (USD per 1M tokens).[/yellow]"
+        )
+    if report.calls_without_usage:
+        console.print(
+            f"[dim]{report.calls_without_usage} llm_response event(s) "
+            f"had no token usage data and were skipped.[/dim]"
+        )
+
+
+@cli.command()
+@click.argument("trace_file", type=click.Path(exists=True, path_type=Path))
 @click.option("--output", "-o", type=click.Path(path_type=Path), help="Output file path.")
 @click.option(
     "--pattern",
