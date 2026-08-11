@@ -457,6 +457,61 @@ def redact(trace_file: Path, output: Path | None, patterns: tuple[str, ...], pla
 
 
 @cli.command()
+@click.argument("directory", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--host", default="127.0.0.1", show_default=True, help="Interface to bind.")
+@click.option("--port", "-p", type=int, default=8600, show_default=True, help="Port to bind.")
+@click.option(
+    "--price",
+    "prices",
+    multiple=True,
+    help="Pricing override for cost views as MODEL=INPUT:OUTPUT in USD per 1M tokens.",
+)
+@click.option("--verbose", is_flag=True, help="Log every HTTP request.")
+def serve(
+    directory: Path, host: str, port: int, prices: tuple[str, ...], verbose: bool
+) -> None:
+    """Serve a directory of traces as a browsable local website.
+
+    Lists every .jsonl trace in DIRECTORY and renders the HTML timeline,
+    cost, and side-by-side diff views in the browser, with no export
+    files written. The directory is re-scanned on every request, so new
+    traces show up on refresh. Press Ctrl+C to stop.
+    """
+    from .server import TraceServer, discover_traces
+
+    overrides: dict[str, tuple[float, float]] = {}
+    for spec in prices:
+        model, sep, price_part = spec.partition("=")
+        input_str, price_sep, output_str = price_part.partition(":")
+        if not sep or not model or not price_sep:
+            raise click.BadParameter(f"'{spec}' is not MODEL=INPUT:OUTPUT", param_hint="--price")
+        try:
+            overrides[model] = (float(input_str), float(output_str))
+        except ValueError as exc:
+            raise click.BadParameter(
+                f"invalid prices for '{model}': {price_part}", param_hint="--price"
+            ) from exc
+
+    try:
+        server = TraceServer(
+            directory, host=host, port=port, pricing=overrides, verbose=verbose
+        )
+    except OSError as exc:
+        raise click.ClickException(f"Could not bind {host}:{port}: {exc}") from exc
+
+    n_traces = len(discover_traces(directory))
+    console.print(f"[bold cyan]agent-replay server[/bold cyan] serving {directory}")
+    console.print(f"  {n_traces} trace(s) found")
+    console.print(f"  [green]{server.url}[/green]  (Ctrl+C to stop)")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Server stopped.[/yellow]")
+    finally:
+        server.server_close()
+
+
+@cli.command()
 @click.argument("trace_file", type=click.Path(exists=True, path_type=Path))
 @click.argument("query")
 def search(trace_file: Path, query: str) -> None:

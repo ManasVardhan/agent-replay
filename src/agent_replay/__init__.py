@@ -8,9 +8,10 @@ from .trace import Event, EventType, Span, Trace
 from .replay import PlaybackStep, ReplayEngine
 from .diff import diff_traces, DiffResult, Divergence
 from .diff_html import export_diff_html, render_diff_html
-from .exporters import export_html, export_json
+from .exporters import export_html, export_json, render_trace_html
 from .otel import export_otlp, to_otlp
 from .redact import redact_trace, BUILTIN_PATTERNS
+from .server import TraceInfo, TraceServer, discover_traces
 
 __all__ = [
     "Recorder",
@@ -28,6 +29,10 @@ __all__ = [
     "render_diff_html",
     "export_html",
     "export_json",
+    "render_trace_html",
+    "TraceInfo",
+    "TraceServer",
+    "discover_traces",
     "export_otlp",
     "to_otlp",
     "redact_trace",

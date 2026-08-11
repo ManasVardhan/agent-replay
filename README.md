@@ -22,6 +22,7 @@ Record every LLM call, tool use, decision point, and state change during agent e
 - 🌳 **Tree view** of nested spans and events
 - 💰 **Cost analytics** - per-model and per-span token and cost breakdowns with a `cost` command
 - 📊 **HTML export** with a self-contained dark-mode timeline
+- 🌐 **Trace server** - `agent-replay serve traces/` to browse timeline, diff, and cost views in the browser
 - 📡 **OpenTelemetry export** (OTLP/JSON) for Jaeger, Tempo, and friends
 - 🧩 **Structured traces** with spans, events, and metadata
 - ⌨️ **CLI** for quick inspection without writing code
@@ -408,6 +409,36 @@ agent-replay export trace.jsonl --format html -o timeline.html
 ```
 
 The HTML file uses a dark theme with color-coded event types and expandable data sections. No external dependencies needed to view it.
+
+## Trace Server
+
+Browse a whole directory of traces in the browser without exporting files one by one:
+
+```bash
+agent-replay serve traces/                  # http://127.0.0.1:8600/
+agent-replay serve traces/ --port 9000      # custom port
+agent-replay serve traces/ --price my-model=1.50:6.00   # pricing for cost views
+```
+
+The index page lists every `.jsonl` trace in the directory with span, event, and duration summaries. From there each trace links to:
+
+- **timeline** - the same dark-mode HTML timeline as `export --format html`, rendered on the fly
+- **cost** - per-model and per-span token and cost tables from the cost analyzer
+- **diff** - side-by-side comparison of any two traces via `/diff?a=<file>&b=<file>`
+
+A JSON listing is available at `/api/traces` for scripting. The directory is re-scanned on every request, so traces saved while the server runs appear on refresh. Only files inside the served directory are ever read, and the server binds to 127.0.0.1 by default. Built entirely on the standard library, no extra dependencies.
+
+Programmatic use:
+
+```python
+from agent_replay import TraceServer, discover_traces
+
+print([i.name for i in discover_traces("traces/")])
+
+server = TraceServer("traces/", port=0)   # port 0 picks a free port
+server.serve_in_background()
+print(server.url)
+```
 
 ## OpenTelemetry Export
 

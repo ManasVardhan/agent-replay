@@ -20,12 +20,15 @@ Native hooks for LlamaIndex so query and agent traces are captured automatically
 ### 💰 Trace Cost Analytics
 Per-span and per-model token and cost breakdowns computed from recorded LLM events. Shipped as the `cost` CLI command backed by `analyze_trace()` / `CostReport`: exact input/output pricing for `token_usage` dicts (LangChain and LlamaIndex traces), average-rate estimates for bare token totals (marked `~`), a built-in per-1M-token table for common OpenAI, Anthropic, and Google models with prefix matching for versioned names, repeatable `--price MODEL=INPUT:OUTPUT` overrides, `--json-output`, and clear reporting of unpriced models and responses without usage data.
 
+### 🌐 Trace Server
+A tiny local web server that lists saved traces and renders the HTML timeline, diff, and cost views in the browser, so a team can browse a directory of agent runs without exporting files one by one. Shipped as the `serve` CLI command (`--host`, `--port`, `--price`, `--verbose`) backed by `TraceServer` / `discover_traces()`: an index of every `.jsonl` trace with links to on-the-fly timeline, cost, and side-by-side diff pages, a `/api/traces` JSON listing, directory re-scan on every request, and standard library only.
+
 ---
 
 ## v0.2 (Planned)
 
-### 🌐 Trace Server
-A tiny local web server (`agent-replay serve traces/`) that lists saved traces and renders the HTML timeline, diff, and cost views in the browser, so a team can browse a directory of agent runs without exporting files one by one.
+### 🔎 Trace Search Across Runs
+Extend `search` to scan a whole directory of traces at once with a `--dir` mode and matching server-side search on the trace server index, so a specific tool call or error can be found across many recorded runs.
 
 ---
 

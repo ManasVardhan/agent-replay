@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html as html_mod
 import json
 from datetime import datetime
 from pathlib import Path
@@ -28,33 +29,33 @@ def export_json(trace: Trace, path: str | Path) -> Path:
     return path
 
 
-def export_html(trace: Trace, path: str | Path) -> Path:
-    """Export trace as a self-contained HTML timeline."""
-    path = Path(path)
-
+def render_trace_html(trace: Trace) -> str:
+    """Render a trace as a self-contained HTML timeline document."""
     events_html = []
     for span in trace.spans:
         for event in span.events:
             color = EVENT_COLORS_HTML.get(event.event_type, "#6b7280")
             ts = datetime.fromtimestamp(event.timestamp).strftime("%H:%M:%S.%f")[:-3]
             label = event.event_type.value.replace("_", " ").upper()
-            data_preview = json.dumps(event.data, indent=2, default=str)
+            data_preview = html_mod.escape(json.dumps(event.data, indent=2, default=str))
+            span_name = html_mod.escape(span.name)
             events_html.append(f"""
         <div class="event" style="border-left: 4px solid {color};">
             <div class="event-header">
                 <span class="event-type" style="color: {color};">{label}</span>
-                <span class="event-span">{span.name}</span>
+                <span class="event-span">{span_name}</span>
                 <span class="event-time">{ts}</span>
             </div>
             <pre class="event-data">{data_preview}</pre>
         </div>""")
 
     duration = f"{trace.duration:.3f}s" if trace.duration else "running"
-    html = f"""<!DOCTYPE html>
+    trace_name = html_mod.escape(trace.name)
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Agent Trace: {trace.name}</title>
+<title>Agent Trace: {trace_name}</title>
 <style>
     * {{ margin: 0; padding: 0; box-sizing: border-box; }}
     body {{ font-family: 'SF Mono', 'Fira Code', monospace; background: #0d1117; color: #c9d1d9; padding: 2rem; }}
@@ -69,13 +70,17 @@ def export_html(trace: Trace, path: str | Path) -> Path:
 </style>
 </head>
 <body>
-    <h1>🔍 {trace.name}</h1>
+    <h1>🔍 {trace_name}</h1>
     <div class="meta">
-        ID: {trace.trace_id} | Spans: {len(trace.spans)} | Events: {trace.event_count} | Duration: {duration}
+        ID: {html_mod.escape(trace.trace_id)} | Spans: {len(trace.spans)} | Events: {trace.event_count} | Duration: {duration}
     </div>
     {"".join(events_html)}
 </body>
 </html>"""
 
-    path.write_text(html)
+
+def export_html(trace: Trace, path: str | Path) -> Path:
+    """Export trace as a self-contained HTML timeline."""
+    path = Path(path)
+    path.write_text(render_trace_html(trace))
     return path
