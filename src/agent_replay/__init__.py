@@ -1,6 +1,6 @@
 """agent-replay: Record, replay, and debug AI agent execution traces."""
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 
 from .cost import CostReport, LLMCall, analyze_trace, resolve_pricing
 from .recorder import Recorder, record_trace
@@ -11,7 +11,14 @@ from .diff_html import export_diff_html, render_diff_html
 from .exporters import export_html, export_json, render_trace_html
 from .otel import export_otlp, to_otlp
 from .redact import redact_trace, BUILTIN_PATTERNS
-from .server import TraceInfo, TraceServer, discover_traces
+from .server import (
+    SearchMatch,
+    TraceInfo,
+    TraceServer,
+    discover_traces,
+    search_directory,
+    search_trace,
+)
 
 __all__ = [
     "Recorder",
@@ -30,9 +37,12 @@ __all__ = [
     "export_html",
     "export_json",
     "render_trace_html",
+    "SearchMatch",
     "TraceInfo",
     "TraceServer",
     "discover_traces",
+    "search_directory",
+    "search_trace",
     "export_otlp",
     "to_otlp",
     "redact_trace",

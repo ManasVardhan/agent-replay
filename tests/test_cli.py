@@ -7,6 +7,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
+from agent_replay import __version__
 from agent_replay.cli import cli
 from agent_replay.recorder import Recorder
 
@@ -32,7 +33,7 @@ class TestCLIVersion:
         runner = CliRunner()
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
-        assert "0.1.1" in result.output
+        assert __version__ in result.output
 
     def test_help(self) -> None:
         runner = CliRunner()

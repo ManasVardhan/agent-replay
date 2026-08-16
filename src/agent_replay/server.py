@@ -19,6 +19,7 @@ from urllib.parse import parse_qs, quote, urlparse
 from .cost import CostReport, analyze_trace
 from .diff_html import render_diff_html
 from .exporters import render_trace_html
+from .replay import ReplayEngine
 from .trace import Trace
 
 TRACE_SUFFIXES = (".jsonl",)
@@ -41,6 +42,14 @@ _PAGE_STYLE = """
     .error { color: #f85149; }
     .back { display: inline-block; margin-bottom: 1rem; color: #8b949e; }
     .est { color: #e3b341; }
+    form.search { margin-bottom: 1.5rem; }
+    form.search input { background: #161b22; border: 1px solid #30363d; color: #c9d1d9;
+                        padding: 0.4rem 0.6rem; border-radius: 4px; width: 20rem;
+                        font-family: inherit; font-size: 0.9rem; }
+    form.search button { background: #21262d; border: 1px solid #30363d; color: #58a6ff;
+                         padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer;
+                         font-family: inherit; font-size: 0.9rem; }
+    td.preview { color: #8b949e; font-size: 0.85rem; }
 """
 
 
@@ -99,6 +108,83 @@ def discover_traces(directory: str | Path) -> list[TraceInfo]:
     return infos
 
 
+_PREVIEW_WIDTH = 120
+
+
+@dataclass(slots=True)
+class SearchMatch:
+    """One event that matched a search query, with enough context to locate it."""
+
+    file_name: str
+    trace_name: str
+    position: int
+    span_name: str
+    event_type: str
+    preview: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "file": self.file_name,
+            "trace": self.trace_name,
+            "position": self.position,
+            "span": self.span_name,
+            "event_type": self.event_type,
+            "preview": self.preview,
+        }
+
+
+def _match_preview(data: object) -> str:
+    text = str(data)
+    if len(text) > _PREVIEW_WIDTH:
+        return text[:_PREVIEW_WIDTH] + "..."
+    return text
+
+
+def search_trace(trace: Trace, query: str, *, file_name: str = "") -> list[SearchMatch]:
+    """Search one loaded trace, returning a SearchMatch per hit.
+
+    Matching is the same case-insensitive substring search as
+    ``ReplayEngine.search``: span name, event type, and event data are all
+    searchable. *file_name* labels the matches when searching many files.
+    """
+    engine = ReplayEngine(trace)
+    matches: list[SearchMatch] = []
+    for pos in engine.search(query):
+        pair = engine.jump(pos)
+        if pair is None:
+            continue
+        span, event = pair
+        matches.append(
+            SearchMatch(
+                file_name=file_name,
+                trace_name=trace.name,
+                position=pos,
+                span_name=span.name,
+                event_type=event.event_type.value,
+                preview=_match_preview(event.data),
+            )
+        )
+    return matches
+
+
+def search_directory(directory: str | Path, query: str) -> tuple[int, list[SearchMatch]]:
+    """Search every trace in a directory for *query*.
+
+    Returns ``(traces_scanned, matches)``. Files that are not loadable
+    traces are skipped, matching ``discover_traces``. Matches are ordered
+    by file name, then event position.
+    """
+    infos = discover_traces(directory)
+    matches: list[SearchMatch] = []
+    for info in infos:
+        try:
+            trace = Trace.load(info.path)
+        except Exception:
+            continue
+        matches.extend(search_trace(trace, query, file_name=info.file_name))
+    return len(infos), matches
+
+
 def _page(title: str, body: str) -> str:
     return (
         "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
@@ -145,6 +231,7 @@ def render_index_html(infos: list[TraceInfo], directory: Path) -> str:
         "<h1>agent-replay</h1>"
         f"<div class=\"meta\">Serving {html_mod.escape(str(directory))} | "
         f"{len(infos)} trace(s)</div>"
+        f"{_search_form()}"
         "<table><thead><tr><th>Trace</th><th>File</th><th>Spans</th>"
         "<th>Events</th><th>Duration</th><th>Views</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table>"
@@ -152,6 +239,53 @@ def render_index_html(infos: list[TraceInfo], directory: Path) -> str:
         "/diff?a=&lt;file&gt;&amp;b=&lt;file&gt;</div>"
     )
     return _page("agent-replay traces", body)
+
+
+def _search_form(query: str = "") -> str:
+    return (
+        "<form class=\"search\" action=\"/search\" method=\"get\">"
+        f"<input type=\"text\" name=\"q\" placeholder=\"Search all traces\" "
+        f"value=\"{html_mod.escape(query, quote=True)}\">"
+        "<button type=\"submit\">Search</button></form>"
+    )
+
+
+def render_search_html(
+    query: str,
+    matches: list[SearchMatch],
+    scanned: int,
+    directory: Path,
+) -> str:
+    """Render the cross-trace search results page."""
+    body_parts = [
+        "<a class=\"back\" href=\"/\">&larr; all traces</a>",
+        f"<h1>Search: {html_mod.escape(query)}</h1>",
+        f"<div class=\"meta\">Serving {html_mod.escape(str(directory))} | "
+        f"{scanned} trace(s) scanned | {len(matches)} match(es)</div>",
+        _search_form(query),
+    ]
+    if not matches:
+        body_parts.append("<p class=\"empty\">No events matched this query.</p>")
+    else:
+        rows = []
+        for m in matches:
+            link = quote(m.file_name)
+            rows.append(
+                "<tr>"
+                f"<td><a href=\"/trace/{link}\">{html_mod.escape(m.file_name)}</a></td>"
+                f"<td>{html_mod.escape(m.trace_name)}</td>"
+                f"<td class=\"num\">{m.position + 1}</td>"
+                f"<td>{html_mod.escape(m.span_name)}</td>"
+                f"<td>{html_mod.escape(m.event_type)}</td>"
+                f"<td class=\"preview\">{html_mod.escape(m.preview)}</td>"
+                "</tr>"
+            )
+        body_parts.append(
+            "<table><thead><tr><th>File</th><th>Trace</th><th>#</th><th>Span</th>"
+            "<th>Event</th><th>Preview</th></tr></thead>"
+            f"<tbody>{''.join(rows)}</tbody></table>"
+        )
+    return _page(f"Search: {query}", "".join(body_parts))
 
 
 def render_cost_html(trace: Trace, report: CostReport, file_name: str) -> str:
@@ -228,7 +362,8 @@ def render_cost_html(trace: Trace, report: CostReport, file_name: str) -> str:
 
 
 class TraceRequestHandler(BaseHTTPRequestHandler):
-    """Routes: /, /api/traces, /trace/<file>, /trace/<file>/cost, /diff?a=&b=."""
+    """Routes: /, /api/traces, /api/search?q=, /trace/<file>, /trace/<file>/cost,
+    /diff?a=&b=, /search?q=."""
 
     server: TraceServer
 
@@ -241,6 +376,10 @@ class TraceRequestHandler(BaseHTTPRequestHandler):
             elif segments == ["api", "traces"]:
                 payload = [info.to_dict() for info in self._infos()]
                 self._send_json(payload)
+            elif segments == ["api", "search"]:
+                self._serve_search_api(parse_qs(parsed.query))
+            elif segments == ["search"]:
+                self._serve_search(parse_qs(parsed.query))
             elif segments[0] == "trace" and len(segments) == 2:
                 self._serve_trace_view(segments[1], view="timeline")
             elif segments[0] == "trace" and len(segments) == 3 and segments[2] == "cost":
@@ -278,6 +417,28 @@ class TraceRequestHandler(BaseHTTPRequestHandler):
         else:
             self._send_html(render_trace_html(trace))
 
+    def _serve_search(self, query: dict[str, list[str]]) -> None:
+        q = (query.get("q") or [""])[0].strip()
+        if not q:
+            self._send_error_page(400, "The search view needs ?q=<query>.")
+            return
+        scanned, matches = search_directory(self.server.directory, q)
+        self._send_html(render_search_html(q, matches, scanned, self.server.directory))
+
+    def _serve_search_api(self, query: dict[str, list[str]]) -> None:
+        q = (query.get("q") or [""])[0].strip()
+        if not q:
+            self._send_json({"error": "The search API needs ?q=<query>."}, status=400)
+            return
+        scanned, matches = search_directory(self.server.directory, q)
+        self._send_json(
+            {
+                "query": q,
+                "traces_scanned": scanned,
+                "matches": [m.to_dict() for m in matches],
+            }
+        )
+
     def _serve_diff(self, query: dict[str, list[str]]) -> None:
         name_a = (query.get("a") or [""])[0]
         name_b = (query.get("b") or [""])[0]
@@ -303,9 +464,9 @@ class TraceRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_json(self, payload: Any) -> None:
+    def _send_json(self, payload: Any, status: int = 200) -> None:
         body = json.dumps(payload, indent=2).encode("utf-8")
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()

@@ -512,29 +512,62 @@ def serve(
 
 
 @cli.command()
-@click.argument("trace_file", type=click.Path(exists=True, path_type=Path))
+@click.argument("target", type=click.Path(exists=True, path_type=Path))
 @click.argument("query")
-def search(trace_file: Path, query: str) -> None:
-    """Search for events matching a query string."""
-    trace = Trace.load(trace_file)
-    engine = ReplayEngine(trace)
-    positions = engine.search(query)
+@click.option("--json-output", "as_json", is_flag=True, help="Output matches as JSON.")
+def search(target: Path, query: str, as_json: bool) -> None:
+    """Search for events matching a query string.
 
-    if not positions:
+    TARGET is a single trace file, or a directory: pass a directory to scan
+    every trace it contains and find a tool call, error, or response across
+    many recorded runs at once.
+    """
+    from .server import search_directory, search_trace
+
+    if target.is_dir():
+        scanned, matches = search_directory(target, query)
+        if as_json:
+            payload = {
+                "query": query,
+                "traces_scanned": scanned,
+                "matches": [m.to_dict() for m in matches],
+            }
+            click.echo(json_mod.dumps(payload, indent=2))
+            return
+        if not matches:
+            console.print(f"[dim]No events matching '{query}' in {scanned} trace(s)[/dim]")
+            return
+        console.print(
+            f"[bold cyan]Found {len(matches)} match(es) for '{query}' "
+            f"across {scanned} trace(s):[/bold cyan]\n"
+        )
+        current_file = None
+        for m in matches:
+            if m.file_name != current_file:
+                current_file = m.file_name
+                console.print(f"[bold]{m.file_name}[/bold] [dim]({m.trace_name})[/dim]")
+            console.print(
+                f"  [{m.position + 1}] [yellow]{m.span_name}[/yellow] [dim]{m.event_type}[/dim]"
+            )
+            console.print(f"      {m.preview}")
+        return
+
+    trace = Trace.load(target)
+    matches = search_trace(trace, query, file_name=target.name)
+
+    if as_json:
+        payload = {"query": query, "matches": [m.to_dict() for m in matches]}
+        click.echo(json_mod.dumps(payload, indent=2))
+        return
+
+    if not matches:
         console.print(f"[dim]No events matching '{query}'[/dim]")
         return
 
-    console.print(f"[bold cyan]Found {len(positions)} match(es) for '{query}':[/bold cyan]\n")
-    for pos in positions:
-        pair = engine.jump(pos)
-        if pair:
-            span, event = pair
-            console.print(
-                f"  [{pos + 1}] [yellow]{span.name}[/yellow] "
-                f"[dim]{event.event_type.value}[/dim]"
-            )
-            # Show relevant data preview
-            data_str = str(event.data)
-            if len(data_str) > 120:
-                data_str = data_str[:120] + "..."
-            console.print(f"      {data_str}")
+    console.print(f"[bold cyan]Found {len(matches)} match(es) for '{query}':[/bold cyan]\n")
+    for m in matches:
+        console.print(
+            f"  [{m.position + 1}] [yellow]{m.span_name}[/yellow] "
+            f"[dim]{m.event_type}[/dim]"
+        )
+        console.print(f"      {m.preview}")

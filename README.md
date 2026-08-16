@@ -229,6 +229,22 @@ while engine.has_next():
     print(f"[{span.name}] {event.event_type.value}")
 ```
 
+### Search Across Runs
+
+Find a tool call, error, or response in one trace, or across every trace in
+a directory at once:
+
+```bash
+agent-replay search trace.jsonl "rate limit"          # one trace
+agent-replay search traces/ "rate limit"              # every trace in a directory
+agent-replay search traces/ "rate limit" --json-output  # machine-readable
+```
+
+Directory results are grouped by file, and the JSON output includes the file,
+trace name, span, event type, event position, and a data preview for each
+match. The same search is available in Python via `search_trace()` and
+`search_directory()`.
+
 ### Streaming Playback
 
 Watch a trace unfold with its original timing, like a terminal screencast.
@@ -425,8 +441,9 @@ The index page lists every `.jsonl` trace in the directory with span, event, and
 - **timeline** - the same dark-mode HTML timeline as `export --format html`, rendered on the fly
 - **cost** - per-model and per-span token and cost tables from the cost analyzer
 - **diff** - side-by-side comparison of any two traces via `/diff?a=<file>&b=<file>`
+- **search** - a search box on the index scans every trace at once via `/search?q=<query>`
 
-A JSON listing is available at `/api/traces` for scripting. The directory is re-scanned on every request, so traces saved while the server runs appear on refresh. Only files inside the served directory are ever read, and the server binds to 127.0.0.1 by default. Built entirely on the standard library, no extra dependencies.
+A JSON listing is available at `/api/traces`, and cross-trace search results at `/api/search?q=<query>`, for scripting. The directory is re-scanned on every request, so traces saved while the server runs appear on refresh. Only files inside the served directory are ever read, and the server binds to 127.0.0.1 by default. Built entirely on the standard library, no extra dependencies.
 
 Programmatic use:
 

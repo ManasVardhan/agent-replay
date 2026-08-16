@@ -181,8 +181,9 @@ agent-replay info trace.jsonl
 agent-replay stats trace.jsonl
 agent-replay stats trace.jsonl --json-output
 
-# Search events by query string
+# Search events by query string (single trace or a whole directory)
 agent-replay search trace.jsonl "search"
+agent-replay search traces/ "search" --json-output
 
 # Version
 agent-replay --version
@@ -220,11 +221,11 @@ pytest --cov=agent_replay -v
 
 ## Current Status
 
-- **Version**: 0.1.1
+- **Version**: 0.2.0
 - **Published on PyPI**: yes (`pip install agent-trace-replay`)
-- **What works**: Full recording (context manager + decorator), JSONL persistence, interactive replay, trace diffing with severity classification, HTML export (dark-mode timeline), Rich terminal viewer (flat + tree), stats, search, info commands
-- **Known limitations**: No LangChain/LlamaIndex auto-instrumentation yet. No OpenTelemetry export. Replay is terminal-only (no web UI).
-- **Roadmap (v0.2)**: LangChain/LlamaIndex integration, streaming replay, trace comparison UI, OpenTelemetry export
+- **What works**: Full recording (context manager + decorator), JSONL persistence, interactive replay, streaming playback, trace diffing with severity classification and HTML comparison, HTML export (dark-mode timeline), OpenTelemetry OTLP export, Rich terminal viewer (flat + tree), stats, single-trace and cross-directory search (CLI, server UI, and /api/search), cost analytics, redaction, local trace server, LangChain and LlamaIndex integrations
+- **Known limitations**: Replay is terminal-only (no interactive web replay). No trace tagging yet.
+- **Roadmap (v0.3)**: Trace tagging and filtering
 
 ## Development Guide
 

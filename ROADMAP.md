@@ -23,12 +23,15 @@ Per-span and per-model token and cost breakdowns computed from recorded LLM even
 ### 🌐 Trace Server
 A tiny local web server that lists saved traces and renders the HTML timeline, diff, and cost views in the browser, so a team can browse a directory of agent runs without exporting files one by one. Shipped as the `serve` CLI command (`--host`, `--port`, `--price`, `--verbose`) backed by `TraceServer` / `discover_traces()`: an index of every `.jsonl` trace with links to on-the-fly timeline, cost, and side-by-side diff pages, a `/api/traces` JSON listing, directory re-scan on every request, and standard library only.
 
+### 🔎 Trace Search Across Runs
+Find a specific tool call or error across many recorded runs. Shipped in v0.2.0: `search` now accepts a directory target (`agent-replay search traces/ "rate limit"`) and scans every trace it contains, grouping matches by file, with `--json-output` for scripting; the trace server gained a search box on the index page, a `/search?q=` results view, and an `/api/search?q=` JSON endpoint; `search_trace()` / `search_directory()` and the `SearchMatch` dataclass expose the same search in Python.
+
 ---
 
-## v0.2 (Planned)
+## v0.3 (Planned)
 
-### 🔎 Trace Search Across Runs
-Extend `search` to scan a whole directory of traces at once with a `--dir` mode and matching server-side search on the trace server index, so a specific tool call or error can be found across many recorded runs.
+### 🏷️ Trace Tagging and Filtering
+Attach tags to traces at record time (`Recorder("run", tags=["prod", "checkout"])`), filter the server index and directory search by tag, and list tags in `/api/traces`, so large trace directories stay navigable.
 
 ---
 
