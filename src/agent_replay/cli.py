@@ -211,6 +211,7 @@ def info(trace_file: Path) -> None:
     console.print(f"  Events:   {trace.event_count}")
     duration = f"{trace.duration:.3f}s" if trace.duration is not None else "N/A"
     console.print(f"  Duration: {duration}")
+    console.print(f"  Tags:     {', '.join(trace.tags) if trace.tags else '(none)'}")
     console.print(f"  Metadata: {trace.metadata}")
 
 
@@ -514,28 +515,35 @@ def serve(
 @cli.command()
 @click.argument("target", type=click.Path(exists=True, path_type=Path))
 @click.argument("query")
+@click.option("--tag", default=None, help="Only scan traces carrying this tag.")
 @click.option("--json-output", "as_json", is_flag=True, help="Output matches as JSON.")
-def search(target: Path, query: str, as_json: bool) -> None:
+def search(target: Path, query: str, tag: str | None, as_json: bool) -> None:
     """Search for events matching a query string.
 
     TARGET is a single trace file, or a directory: pass a directory to scan
     every trace it contains and find a tool call, error, or response across
-    many recorded runs at once.
+    many recorded runs at once. Use --tag to limit the scan to traces
+    recorded with that tag.
     """
     from .server import search_directory, search_trace
 
     if target.is_dir():
-        scanned, matches = search_directory(target, query)
+        scanned, matches = search_directory(target, query, tag=tag)
         if as_json:
             payload = {
                 "query": query,
                 "traces_scanned": scanned,
                 "matches": [m.to_dict() for m in matches],
             }
+            if tag is not None:
+                payload["tag"] = tag
             click.echo(json_mod.dumps(payload, indent=2))
             return
         if not matches:
-            console.print(f"[dim]No events matching '{query}' in {scanned} trace(s)[/dim]")
+            scope = f" tagged '{tag}'" if tag else ""
+            console.print(
+                f"[dim]No events matching '{query}' in {scanned} trace(s){scope}[/dim]"
+            )
             return
         console.print(
             f"[bold cyan]Found {len(matches)} match(es) for '{query}' "
@@ -553,6 +561,12 @@ def search(target: Path, query: str, as_json: bool) -> None:
         return
 
     trace = Trace.load(target)
+    if tag is not None and tag not in trace.tags:
+        if as_json:
+            click.echo(json_mod.dumps({"query": query, "tag": tag, "matches": []}, indent=2))
+        else:
+            console.print(f"[dim]{target.name} does not carry the tag '{tag}'[/dim]")
+        return
     matches = search_trace(trace, query, file_name=target.name)
 
     if as_json:

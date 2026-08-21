@@ -26,12 +26,15 @@ A tiny local web server that lists saved traces and renders the HTML timeline, d
 ### 🔎 Trace Search Across Runs
 Find a specific tool call or error across many recorded runs. Shipped in v0.2.0: `search` now accepts a directory target (`agent-replay search traces/ "rate limit"`) and scans every trace it contains, grouping matches by file, with `--json-output` for scripting; the trace server gained a search box on the index page, a `/search?q=` results view, and an `/api/search?q=` JSON endpoint; `search_trace()` / `search_directory()` and the `SearchMatch` dataclass expose the same search in Python.
 
+### 🏷️ Trace Tagging and Filtering
+Attach tags to traces at record time so large trace directories stay navigable. Shipped in v0.3.0: `Recorder("run", tags=["prod", "checkout"])` and `record_trace(..., tags=[...])` save normalized tags in the trace header (older traces load with no tags), `agent-replay info` shows them, `agent-replay search --tag` scopes cross-run search, `discover_traces(dir, tag=...)`, `search_directory(dir, q, tag=...)`, and `list_tags(dir)` expose the same filtering in Python, and the trace server renders clickable tag chips on the index with `/?tag=`, tag-aware search, and tags plus `?tag=` filtering on `/api/traces` and `/api/search`.
+
 ---
 
-## v0.3 (Planned)
+## v0.4 (Planned)
 
-### 🏷️ Trace Tagging and Filtering
-Attach tags to traces at record time (`Recorder("run", tags=["prod", "checkout"])`), filter the server index and directory search by tag, and list tags in `/api/traces`, so large trace directories stay navigable.
+### 🔁 Live Trace Following
+Tail a trace file as an agent writes it (`agent-replay follow trace.jsonl`), streaming new spans and events to the terminal as they happen, so long-running agents can be watched without waiting for the run to finish.
 
 ---
 

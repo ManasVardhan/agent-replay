@@ -95,6 +95,20 @@ class Span:
         )
 
 
+def normalize_tags(tags: list[str] | tuple[str, ...] | None) -> list[str]:
+    """Normalize a tag list: strip whitespace, drop empties, dedupe in order."""
+    if not tags:
+        return []
+    seen: set[str] = set()
+    result: list[str] = []
+    for tag in tags:
+        cleaned = str(tag).strip()
+        if cleaned and cleaned not in seen:
+            seen.add(cleaned)
+            result.append(cleaned)
+    return result
+
+
 @dataclass
 class Trace:
     """A complete execution trace consisting of ordered spans."""
@@ -104,6 +118,10 @@ class Trace:
     end_time: float | None = None
     spans: list[Span] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+    tags: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.tags = normalize_tags(self.tags)
 
     @property
     def duration(self) -> float | None:
@@ -180,6 +198,7 @@ class Trace:
             "end_time": self.end_time,
             "spans": [s.to_dict() for s in self.spans],
             "metadata": self.metadata,
+            "tags": self.tags,
         }
 
     @classmethod
@@ -191,6 +210,7 @@ class Trace:
             end_time=d.get("end_time"),
             spans=[Span.from_dict(s) for s in d.get("spans", [])],
             metadata=d.get("metadata", {}),
+            tags=d.get("tags", []),
         )
 
     def save(self, path: str | Path) -> Path:
@@ -204,6 +224,7 @@ class Trace:
                 "start_time": self.start_time,
                 "end_time": self.end_time,
                 "metadata": self.metadata,
+                "tags": self.tags,
             }
             f.write(json.dumps(header) + "\n")
             for span in self.spans:
@@ -246,4 +267,5 @@ class Trace:
             end_time=header.get("end_time"),
             spans=spans,
             metadata=header.get("metadata", {}),
+            tags=header.get("tags", []),
         )

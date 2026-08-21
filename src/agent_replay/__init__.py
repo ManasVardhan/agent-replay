@@ -1,10 +1,10 @@
 """agent-replay: Record, replay, and debug AI agent execution traces."""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 from .cost import CostReport, LLMCall, analyze_trace, resolve_pricing
 from .recorder import Recorder, record_trace
-from .trace import Event, EventType, Span, Trace
+from .trace import Event, EventType, Span, Trace, normalize_tags
 from .replay import PlaybackStep, ReplayEngine
 from .diff import diff_traces, DiffResult, Divergence
 from .diff_html import export_diff_html, render_diff_html
@@ -16,6 +16,7 @@ from .server import (
     TraceInfo,
     TraceServer,
     discover_traces,
+    list_tags,
     search_directory,
     search_trace,
 )
@@ -41,6 +42,8 @@ __all__ = [
     "TraceInfo",
     "TraceServer",
     "discover_traces",
+    "list_tags",
+    "normalize_tags",
     "search_directory",
     "search_trace",
     "export_otlp",

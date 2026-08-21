@@ -23,6 +23,7 @@ Record every LLM call, tool use, decision point, and state change during agent e
 - 💰 **Cost analytics** - per-model and per-span token and cost breakdowns with a `cost` command
 - 📊 **HTML export** with a self-contained dark-mode timeline
 - 🌐 **Trace server** - `agent-replay serve traces/` to browse timeline, diff, and cost views in the browser
+- 🏷️ **Trace tagging** - tag runs at record time, then filter the server index and cross-run search by tag
 - 📡 **OpenTelemetry export** (OTLP/JSON) for Jaeger, Tempo, and friends
 - 🧩 **Structured traces** with spans, events, and metadata
 - ⌨️ **CLI** for quick inspection without writing code
@@ -112,7 +113,7 @@ agent-replay replay trace.jsonl
 ```python
 from agent_replay import Recorder
 
-with Recorder("my-agent", output_path="trace.jsonl") as rec:
+with Recorder("my-agent", output_path="trace.jsonl", tags=["prod", "checkout"]) as rec:
     with rec.span("step-1"):
         rec.llm_request(model="gpt-4", messages=[...])
         rec.llm_response(content="...", tokens=10)
@@ -237,6 +238,7 @@ a directory at once:
 ```bash
 agent-replay search trace.jsonl "rate limit"          # one trace
 agent-replay search traces/ "rate limit"              # every trace in a directory
+agent-replay search traces/ "rate limit" --tag prod   # only traces tagged prod
 agent-replay search traces/ "rate limit" --json-output  # machine-readable
 ```
 
@@ -244,6 +246,25 @@ Directory results are grouped by file, and the JSON output includes the file,
 trace name, span, event type, event position, and a data preview for each
 match. The same search is available in Python via `search_trace()` and
 `search_directory()`.
+
+### Tagging Runs
+
+Tag traces at record time so large trace directories stay navigable:
+
+```python
+from agent_replay import Recorder, discover_traces, list_tags
+
+with Recorder("checkout-run", output_path="traces/run1.jsonl",
+              tags=["prod", "checkout"]) as rec:
+    ...
+
+print(list_tags("traces/"))                       # every tag in a directory
+prod = discover_traces("traces/", tag="prod")     # only traces tagged prod
+```
+
+Tags are saved in the trace header, shown by `agent-replay info`, filter
+`agent-replay search --tag`, and drive the trace server's tag filter. Traces
+recorded before tags existed simply load with no tags.
 
 ### Streaming Playback
 
@@ -436,14 +457,15 @@ agent-replay serve traces/ --port 9000      # custom port
 agent-replay serve traces/ --price my-model=1.50:6.00   # pricing for cost views
 ```
 
-The index page lists every `.jsonl` trace in the directory with span, event, and duration summaries. From there each trace links to:
+The index page lists every `.jsonl` trace in the directory with tags, span, event, and duration summaries. From there each trace links to:
 
 - **timeline** - the same dark-mode HTML timeline as `export --format html`, rendered on the fly
 - **cost** - per-model and per-span token and cost tables from the cost analyzer
 - **diff** - side-by-side comparison of any two traces via `/diff?a=<file>&b=<file>`
 - **search** - a search box on the index scans every trace at once via `/search?q=<query>`
+- **tags** - click any tag (or use `/?tag=<tag>`) to filter the index; the search box keeps the active tag filter
 
-A JSON listing is available at `/api/traces`, and cross-trace search results at `/api/search?q=<query>`, for scripting. The directory is re-scanned on every request, so traces saved while the server runs appear on refresh. Only files inside the served directory are ever read, and the server binds to 127.0.0.1 by default. Built entirely on the standard library, no extra dependencies.
+A JSON listing is available at `/api/traces` (each entry includes its tags, `?tag=` filters), and cross-trace search results at `/api/search?q=<query>&tag=<tag>`, for scripting. The directory is re-scanned on every request, so traces saved while the server runs appear on refresh. Only files inside the served directory are ever read, and the server binds to 127.0.0.1 by default. Built entirely on the standard library, no extra dependencies.
 
 Programmatic use:
 

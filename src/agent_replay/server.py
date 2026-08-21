@@ -10,7 +10,7 @@ from __future__ import annotations
 import html as html_mod
 import json
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -50,6 +50,11 @@ _PAGE_STYLE = """
                          padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer;
                          font-family: inherit; font-size: 0.9rem; }
     td.preview { color: #8b949e; font-size: 0.85rem; }
+    .tag { display: inline-block; background: #21262d; border: 1px solid #30363d;
+           border-radius: 10px; padding: 0.05rem 0.5rem; font-size: 0.8rem;
+           color: #8b949e; }
+    a.tag:hover { text-decoration: none; border-color: #58a6ff; color: #58a6ff; }
+    .tag.active { color: #58a6ff; border-color: #58a6ff; }
 """
 
 
@@ -64,6 +69,7 @@ class TraceInfo:
     spans: int
     events: int
     duration: float | None
+    tags: list[str] = dataclass_field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -73,14 +79,16 @@ class TraceInfo:
             "spans": self.spans,
             "events": self.events,
             "duration": self.duration,
+            "tags": self.tags,
         }
 
 
-def discover_traces(directory: str | Path) -> list[TraceInfo]:
+def discover_traces(directory: str | Path, *, tag: str | None = None) -> list[TraceInfo]:
     """Find loadable trace files directly inside a directory.
 
     Files that cannot be parsed as traces are skipped. Results are sorted
-    by file name for a stable listing.
+    by file name for a stable listing. Pass *tag* to keep only traces
+    carrying that tag.
     """
     directory = Path(directory)
     infos: list[TraceInfo] = []
@@ -94,6 +102,8 @@ def discover_traces(directory: str | Path) -> list[TraceInfo]:
         if not trace.spans and trace.start_time == 0:
             # No spans and no trace header: not an agent-replay trace file.
             continue
+        if tag is not None and tag not in trace.tags:
+            continue
         infos.append(
             TraceInfo(
                 file_name=path.name,
@@ -103,9 +113,18 @@ def discover_traces(directory: str | Path) -> list[TraceInfo]:
                 spans=len(trace.spans),
                 events=trace.event_count,
                 duration=trace.duration,
+                tags=trace.tags,
             )
         )
     return infos
+
+
+def list_tags(directory: str | Path) -> list[str]:
+    """Return every tag used by traces in a directory, sorted alphabetically."""
+    tags: set[str] = set()
+    for info in discover_traces(directory):
+        tags.update(info.tags)
+    return sorted(tags)
 
 
 _PREVIEW_WIDTH = 120
@@ -167,14 +186,17 @@ def search_trace(trace: Trace, query: str, *, file_name: str = "") -> list[Searc
     return matches
 
 
-def search_directory(directory: str | Path, query: str) -> tuple[int, list[SearchMatch]]:
+def search_directory(
+    directory: str | Path, query: str, *, tag: str | None = None
+) -> tuple[int, list[SearchMatch]]:
     """Search every trace in a directory for *query*.
 
     Returns ``(traces_scanned, matches)``. Files that are not loadable
-    traces are skipped, matching ``discover_traces``. Matches are ordered
-    by file name, then event position.
+    traces are skipped, matching ``discover_traces``. Pass *tag* to scan
+    only traces carrying that tag. Matches are ordered by file name, then
+    event position.
     """
-    infos = discover_traces(directory)
+    infos = discover_traces(directory, tag=tag)
     matches: list[SearchMatch] = []
     for info in infos:
         try:
@@ -193,13 +215,54 @@ def _page(title: str, body: str) -> str:
     )
 
 
-def render_index_html(infos: list[TraceInfo], directory: Path) -> str:
-    """Render the trace listing page."""
+def _render_tags(tags: list[str], active: str | None = None) -> str:
+    """Render a trace's tags as filter links, highlighting the active one."""
+    parts = []
+    for t in tags:
+        cls = "tag active" if t == active else "tag"
+        parts.append(
+            f"<a class=\"{cls}\" href=\"/?tag={quote(t)}\">{html_mod.escape(t)}</a>"
+        )
+    return " ".join(parts)
+
+
+def render_index_html(
+    infos: list[TraceInfo],
+    directory: Path,
+    tag: str | None = None,
+    all_tags: list[str] | None = None,
+) -> str:
+    """Render the trace listing page, optionally filtered to one tag."""
+    filter_note = ""
+    if tag is not None:
+        filter_note = (
+            f"<div class=\"meta\">Filtered to tag "
+            f"<span class=\"tag active\">{html_mod.escape(tag)}</span> | "
+            "<a href=\"/\">clear filter</a></div>"
+        )
+    tag_bar = ""
+    if all_tags:
+        tag_bar = (
+            "<div class=\"meta\">Tags: "
+            + " ".join(
+                f"<a class=\"tag{' active' if t == tag else ''}\" "
+                f"href=\"/?tag={quote(t)}\">{html_mod.escape(t)}</a>"
+                for t in all_tags
+            )
+            + "</div>"
+        )
+
     if not infos:
+        message = (
+            f"No traces carry the tag {html_mod.escape(repr(tag))}."
+            if tag is not None
+            else "No trace files found in this directory."
+        )
         body = (
             "<h1>agent-replay</h1>"
             f"<div class=\"meta\">Serving {html_mod.escape(str(directory))}</div>"
-            "<p class=\"empty\">No trace files found in this directory.</p>"
+            f"{filter_note}{tag_bar}"
+            f"<p class=\"empty\">{message}</p>"
         )
         return _page("agent-replay traces", body)
 
@@ -216,6 +279,7 @@ def render_index_html(infos: list[TraceInfo], directory: Path) -> str:
             "<tr>"
             f"<td><a href=\"/trace/{link}\">{html_mod.escape(info.name)}</a></td>"
             f"<td>{html_mod.escape(info.file_name)}</td>"
+            f"<td>{_render_tags(info.tags, active=tag)}</td>"
             f"<td class=\"num\">{info.spans}</td>"
             f"<td class=\"num\">{info.events}</td>"
             f"<td class=\"num\">{duration}</td>"
@@ -231,8 +295,9 @@ def render_index_html(infos: list[TraceInfo], directory: Path) -> str:
         "<h1>agent-replay</h1>"
         f"<div class=\"meta\">Serving {html_mod.escape(str(directory))} | "
         f"{len(infos)} trace(s)</div>"
-        f"{_search_form()}"
-        "<table><thead><tr><th>Trace</th><th>File</th><th>Spans</th>"
+        f"{filter_note}{tag_bar}"
+        f"{_search_form(tag=tag)}"
+        "<table><thead><tr><th>Trace</th><th>File</th><th>Tags</th><th>Spans</th>"
         "<th>Events</th><th>Duration</th><th>Views</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table>"
         "<div class=\"meta\">Diff any two traces via "
@@ -241,11 +306,18 @@ def render_index_html(infos: list[TraceInfo], directory: Path) -> str:
     return _page("agent-replay traces", body)
 
 
-def _search_form(query: str = "") -> str:
+def _search_form(query: str = "", tag: str | None = None) -> str:
+    hidden = ""
+    if tag is not None:
+        hidden = (
+            f"<input type=\"hidden\" name=\"tag\" "
+            f"value=\"{html_mod.escape(tag, quote=True)}\">"
+        )
     return (
         "<form class=\"search\" action=\"/search\" method=\"get\">"
         f"<input type=\"text\" name=\"q\" placeholder=\"Search all traces\" "
         f"value=\"{html_mod.escape(query, quote=True)}\">"
+        f"{hidden}"
         "<button type=\"submit\">Search</button></form>"
     )
 
@@ -255,14 +327,20 @@ def render_search_html(
     matches: list[SearchMatch],
     scanned: int,
     directory: Path,
+    tag: str | None = None,
 ) -> str:
     """Render the cross-trace search results page."""
+    tag_note = ""
+    if tag is not None:
+        tag_note = (
+            f" | tag <span class=\"tag active\">{html_mod.escape(tag)}</span>"
+        )
     body_parts = [
         "<a class=\"back\" href=\"/\">&larr; all traces</a>",
         f"<h1>Search: {html_mod.escape(query)}</h1>",
         f"<div class=\"meta\">Serving {html_mod.escape(str(directory))} | "
-        f"{scanned} trace(s) scanned | {len(matches)} match(es)</div>",
-        _search_form(query),
+        f"{scanned} trace(s) scanned | {len(matches)} match(es){tag_note}</div>",
+        _search_form(query, tag=tag),
     ]
     if not matches:
         body_parts.append("<p class=\"empty\">No events matched this query.</p>")
@@ -362,8 +440,8 @@ def render_cost_html(trace: Trace, report: CostReport, file_name: str) -> str:
 
 
 class TraceRequestHandler(BaseHTTPRequestHandler):
-    """Routes: /, /api/traces, /api/search?q=, /trace/<file>, /trace/<file>/cost,
-    /diff?a=&b=, /search?q=."""
+    """Routes: /?tag=, /api/traces?tag=, /api/search?q=&tag=, /trace/<file>,
+    /trace/<file>/cost, /diff?a=&b=, /search?q=&tag=."""
 
     server: TraceServer
 
@@ -372,9 +450,13 @@ class TraceRequestHandler(BaseHTTPRequestHandler):
         segments = [s for s in parsed.path.split("/") if s]
         try:
             if not segments:
-                self._send_html(render_index_html(self._infos(), self.server.directory))
+                self._serve_index(parse_qs(parsed.query))
             elif segments == ["api", "traces"]:
-                payload = [info.to_dict() for info in self._infos()]
+                tag = self._tag_param(parse_qs(parsed.query))
+                payload = [
+                    info.to_dict()
+                    for info in discover_traces(self.server.directory, tag=tag)
+                ]
                 self._send_json(payload)
             elif segments == ["api", "search"]:
                 self._serve_search_api(parse_qs(parsed.query))
@@ -417,27 +499,45 @@ class TraceRequestHandler(BaseHTTPRequestHandler):
         else:
             self._send_html(render_trace_html(trace))
 
+    @staticmethod
+    def _tag_param(query: dict[str, list[str]]) -> str | None:
+        tag = (query.get("tag") or [""])[0].strip()
+        return tag or None
+
+    def _serve_index(self, query: dict[str, list[str]]) -> None:
+        tag = self._tag_param(query)
+        infos = discover_traces(self.server.directory, tag=tag)
+        all_tags = list_tags(self.server.directory)
+        self._send_html(
+            render_index_html(infos, self.server.directory, tag=tag, all_tags=all_tags)
+        )
+
     def _serve_search(self, query: dict[str, list[str]]) -> None:
         q = (query.get("q") or [""])[0].strip()
         if not q:
             self._send_error_page(400, "The search view needs ?q=<query>.")
             return
-        scanned, matches = search_directory(self.server.directory, q)
-        self._send_html(render_search_html(q, matches, scanned, self.server.directory))
+        tag = self._tag_param(query)
+        scanned, matches = search_directory(self.server.directory, q, tag=tag)
+        self._send_html(
+            render_search_html(q, matches, scanned, self.server.directory, tag=tag)
+        )
 
     def _serve_search_api(self, query: dict[str, list[str]]) -> None:
         q = (query.get("q") or [""])[0].strip()
         if not q:
             self._send_json({"error": "The search API needs ?q=<query>."}, status=400)
             return
-        scanned, matches = search_directory(self.server.directory, q)
-        self._send_json(
-            {
-                "query": q,
-                "traces_scanned": scanned,
-                "matches": [m.to_dict() for m in matches],
-            }
-        )
+        tag = self._tag_param(query)
+        scanned, matches = search_directory(self.server.directory, q, tag=tag)
+        payload: dict[str, Any] = {
+            "query": q,
+            "traces_scanned": scanned,
+            "matches": [m.to_dict() for m in matches],
+        }
+        if tag is not None:
+            payload["tag"] = tag
+        self._send_json(payload)
 
     def _serve_diff(self, query: dict[str, list[str]]) -> None:
         name_a = (query.get("a") or [""])[0]

@@ -32,8 +32,9 @@ class Recorder:
         name: str = "agent-run",
         metadata: dict[str, Any] | None = None,
         output_path: str | Path | None = None,
+        tags: list[str] | None = None,
     ) -> None:
-        self.trace = Trace(name=name, metadata=metadata or {})
+        self.trace = Trace(name=name, metadata=metadata or {}, tags=tags or [])
         self.output_path = Path(output_path) if output_path else None
         self._span_stack: list[Span] = []
         self._current_span: Span | None = None
@@ -105,6 +106,7 @@ class Recorder:
 def record_trace(
     name: str = "agent-run",
     output_path: str | Path | None = None,
+    tags: list[str] | None = None,
 ) -> Callable:
     """Decorator that wraps a function with a Recorder.
 
@@ -120,7 +122,7 @@ def record_trace(
     def decorator(fn: Callable) -> Callable:
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            with Recorder(name=name, output_path=output_path) as rec:
+            with Recorder(name=name, output_path=output_path, tags=tags) as rec:
                 kwargs["recorder"] = rec
                 return fn(*args, **kwargs)
         return wrapper
