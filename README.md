@@ -18,6 +18,7 @@ Record every LLM call, tool use, decision point, and state change during agent e
 - 🔗 **LangChain integration** - capture traces automatically with a callback handler
 - 🦙 **LlamaIndex integration** - record queries, retrievals, and agent steps automatically
 - ⏯️ **Replay** traces step-by-step in the terminal
+- 🔴 **Live follow** - `agent-replay follow trace.jsonl` tails a running agent's trace and streams new spans as they land
 - 🔍 **Diff** two traces to find divergence points, with side-by-side HTML comparison reports
 - 🌳 **Tree view** of nested spans and events
 - 💰 **Cost analytics** - per-model and per-span token and cost breakdowns with a `cost` command
@@ -293,6 +294,39 @@ and a compact summary:
 Press Ctrl+C to stop playback early. Programmatic access via
 `engine.playback_plan(speed=2.0, max_delay=1.0)`, which returns
 `PlaybackStep` objects with speed-adjusted delays and elapsed times.
+
+### Live Trace Following
+
+Watch a long-running agent without waiting for it to finish. `follow` reads
+the spans already in a trace file, then tails it and streams each new span
+and its events to the terminal as the agent appends them:
+
+```bash
+# Show existing spans, then stream new ones as they are written
+agent-replay follow trace.jsonl
+
+# Skip existing spans and only show new activity
+agent-replay follow trace.jsonl --from-end
+
+# Check every 0.2s and stop after 30 idle seconds
+agent-replay follow trace.jsonl --poll-interval 0.2 --timeout 30
+```
+
+```
+Following: trace.jsonl (from start)
+Press Ctrl+C to stop.
+Trace: live-agent tags: demo
+
+>>> plan (0.412s)
+  🧠 llm_request model=gpt-4o messages=0
+  🔧 tool_call search({'q': 'weather SF'})
+```
+
+The follower tracks a byte offset and buffers partial trailing lines, so a
+span still being written is not shown until its line is complete. `--timeout`
+defaults to 0 (follow until Ctrl+C). Programmatic access via `TraceFollower`:
+each `poll()` returns typed `FollowUpdate` records (header, span, or
+malformed) that appeared since the previous call.
 
 ## Diffing
 

@@ -134,6 +134,80 @@ def play(trace_file: Path, speed: float, max_delay: float, no_delay: bool) -> No
 
 
 @cli.command()
+@click.argument("trace_file", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--from-end",
+    is_flag=True,
+    help="Skip spans already in the file and only stream new ones.",
+)
+@click.option(
+    "--poll-interval",
+    type=float,
+    default=0.5,
+    show_default=True,
+    help="Seconds between checks for new spans.",
+)
+@click.option(
+    "--timeout",
+    type=float,
+    default=0.0,
+    show_default=True,
+    help="Stop after this many idle seconds with no new spans (0 = follow until Ctrl+C).",
+)
+def follow(trace_file: Path, from_end: bool, poll_interval: float, timeout: float) -> None:
+    """Tail a trace file as an agent writes it, streaming new spans live.
+
+    Reads spans already in the file, then watches for new ones appended as
+    a long-running agent records them, so you can watch a run without
+    waiting for it to finish. Use --from-end to skip existing spans and
+    show only new activity. Press Ctrl+C to stop.
+    """
+    if poll_interval <= 0:
+        raise click.BadParameter("must be > 0", param_hint="--poll-interval")
+    if timeout < 0:
+        raise click.BadParameter("must be >= 0", param_hint="--timeout")
+
+    from .follow import KIND_HEADER, KIND_MALFORMED, KIND_SPAN, TraceFollower
+
+    follower = TraceFollower(trace_file, from_start=not from_end)
+    viewer = TraceViewer(console)
+    mode = "new spans only" if from_end else "from start"
+    console.print(f"[bold cyan]Following: {trace_file}[/bold cyan] [dim]({mode})[/dim]")
+    console.print("[dim]Press Ctrl+C to stop.[/dim]")
+
+    spans_seen = 0
+    idle = 0.0
+    try:
+        while True:
+            updates = follower.poll()
+            if updates:
+                idle = 0.0
+                for update in updates:
+                    if update.kind == KIND_HEADER and update.header:
+                        name = update.header.get("name", "unnamed")
+                        tags = update.header.get("tags") or []
+                        tag_note = f" [dim]tags: {', '.join(tags)}[/dim]" if tags else ""
+                        console.print(f"[bold]Trace: {name}[/bold]{tag_note}")
+                    elif update.kind == KIND_SPAN and update.span is not None:
+                        viewer.show_follow_span(update.span)
+                        spans_seen += 1
+                    elif update.kind == KIND_MALFORMED:
+                        console.print("[dim]Skipping malformed line.[/dim]")
+                continue
+            if timeout > 0:
+                idle += poll_interval
+                if idle >= timeout:
+                    console.print(
+                        f"\n[yellow]No new spans for {timeout:g}s; "
+                        f"stopping after {spans_seen} span(s).[/yellow]"
+                    )
+                    return
+            time.sleep(poll_interval)
+    except KeyboardInterrupt:
+        console.print(f"\n[yellow]Stopped following after {spans_seen} span(s).[/yellow]")
+
+
+@cli.command()
 @click.argument("trace_a", type=click.Path(exists=True, path_type=Path))
 @click.argument("trace_b", type=click.Path(exists=True, path_type=Path))
 @click.option(

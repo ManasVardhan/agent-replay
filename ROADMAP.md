@@ -29,12 +29,15 @@ Find a specific tool call or error across many recorded runs. Shipped in v0.2.0:
 ### 🏷️ Trace Tagging and Filtering
 Attach tags to traces at record time so large trace directories stay navigable. Shipped in v0.3.0: `Recorder("run", tags=["prod", "checkout"])` and `record_trace(..., tags=[...])` save normalized tags in the trace header (older traces load with no tags), `agent-replay info` shows them, `agent-replay search --tag` scopes cross-run search, `discover_traces(dir, tag=...)`, `search_directory(dir, q, tag=...)`, and `list_tags(dir)` expose the same filtering in Python, and the trace server renders clickable tag chips on the index with `/?tag=`, tag-aware search, and tags plus `?tag=` filtering on `/api/traces` and `/api/search`.
 
+### 🔁 Live Trace Following
+Watch a long-running agent without waiting for it to finish. Shipped in v0.4.0 as the `follow` CLI command backed by `TraceFollower`: it reads the spans already in a JSONL trace, then tails the file and streams each new span and its events to the terminal as the writer appends them. `--from-end` skips existing spans and shows only new activity, `--poll-interval` controls how often the file is checked, and `--timeout` stops after a set number of idle seconds (0 follows until Ctrl+C). The follower tracks a byte offset and buffers partial trailing lines, so a span still mid-write is not parsed until its newline arrives. Python API: `TraceFollower.poll()` returns typed `FollowUpdate` records (header, span, or malformed).
+
 ---
 
-## v0.4 (Planned)
+## v0.5 (Planned)
 
-### 🔁 Live Trace Following
-Tail a trace file as an agent writes it (`agent-replay follow trace.jsonl`), streaming new spans and events to the terminal as they happen, so long-running agents can be watched without waiting for the run to finish.
+### 🌊 Live Trace Server Streaming
+Push new spans to the browser trace server over server-sent events as they are written, so the web timeline updates live while an agent runs, matching the terminal `follow` command.
 
 ---
 

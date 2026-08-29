@@ -189,6 +189,19 @@ class TraceViewer:
             f"[dim]{summary}[/dim]"
         )
 
+    def show_follow_span(self, span: Span) -> None:
+        """Render a span and its events as they arrive during a live follow."""
+        duration = f" ({span.duration:.3f}s)" if span.duration is not None else " (open)"
+        self.console.print(f"\n[bold yellow]>>> {span.name}[/bold yellow]{duration}")
+        for event in span.events:
+            icon = EVENT_ICONS.get(event.event_type, "?")
+            color = EVENT_COLORS.get(event.event_type, "white")
+            summary = self._event_summary(event)
+            self.console.print(
+                f"  {icon} [{color}]{event.event_type.value}[/{color}] "
+                f"[dim]{summary}[/dim]"
+            )
+
     def show_step(self, engine: ReplayEngine) -> None:
         """Show the current step in a replay."""
         result = engine.peek()
