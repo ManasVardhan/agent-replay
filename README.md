@@ -24,6 +24,7 @@ Record every LLM call, tool use, decision point, and state change during agent e
 - 💰 **Cost analytics** - per-model and per-span token and cost breakdowns with a `cost` command
 - 📊 **HTML export** with a self-contained dark-mode timeline
 - 🌐 **Trace server** - `agent-replay serve traces/` to browse timeline, diff, and cost views in the browser
+- 🌊 **Live streaming** - the server's live view pushes new spans to the browser over server-sent events while an agent runs
 - 🏷️ **Trace tagging** - tag runs at record time, then filter the server index and cross-run search by tag
 - 📡 **OpenTelemetry export** (OTLP/JSON) for Jaeger, Tempo, and friends
 - 🧩 **Structured traces** with spans, events, and metadata
@@ -494,12 +495,27 @@ agent-replay serve traces/ --price my-model=1.50:6.00   # pricing for cost views
 The index page lists every `.jsonl` trace in the directory with tags, span, event, and duration summaries. From there each trace links to:
 
 - **timeline** - the same dark-mode HTML timeline as `export --format html`, rendered on the fly
+- **live** - a live view that streams new spans into the page over server-sent events while an agent is still writing the trace
 - **cost** - per-model and per-span token and cost tables from the cost analyzer
 - **diff** - side-by-side comparison of any two traces via `/diff?a=<file>&b=<file>`
 - **search** - a search box on the index scans every trace at once via `/search?q=<query>`
 - **tags** - click any tag (or use `/?tag=<tag>`) to filter the index; the search box keeps the active tag filter
 
 A JSON listing is available at `/api/traces` (each entry includes its tags, `?tag=` filters), and cross-trace search results at `/api/search?q=<query>&tag=<tag>`, for scripting. The directory is re-scanned on every request, so traces saved while the server runs appear on refresh. Only files inside the served directory are ever read, and the server binds to 127.0.0.1 by default. Built entirely on the standard library, no extra dependencies.
+
+### Live Streaming
+
+The live view at `/trace/<file>/live` is the browser twin of the terminal `follow` command: spans already in the file are rendered server-side, then the page subscribes to `/trace/<file>/events` and appends each new span the moment the writer saves it, with a live/reconnecting status pill. The events endpoint is plain server-sent events, so it is also scriptable:
+
+```bash
+# Stream every span in the file, then new ones as they land
+curl -N http://127.0.0.1:8600/trace/run.jsonl/events
+
+# Only new activity, checked every 0.2s, closing after 30 idle seconds
+curl -N "http://127.0.0.1:8600/trace/run.jsonl/events?from_end=1&poll=0.2&timeout=30"
+```
+
+Each SSE message carries an `event:` type (`header`, `span`, `malformed`, or `end` when an idle `?timeout=` expires) and a JSON `data:` payload; span payloads match `Span.to_dict()`. Malformed trailing lines are reported instead of crashing the stream, and a mid-write span is not parsed until its newline arrives, using the same tailing logic as `follow`.
 
 Programmatic use:
 

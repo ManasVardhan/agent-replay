@@ -10,6 +10,7 @@ from __future__ import annotations
 import html as html_mod
 import json
 import threading
+import time
 from dataclasses import dataclass, field as dataclass_field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -19,8 +20,13 @@ from urllib.parse import parse_qs, quote, urlparse
 from .cost import CostReport, analyze_trace
 from .diff_html import render_diff_html
 from .exporters import render_trace_html
+from .follow import KIND_HEADER, KIND_MALFORMED, KIND_SPAN, TraceFollower
 from .replay import ReplayEngine
 from .trace import Trace
+
+SSE_DEFAULT_POLL = 0.5
+SSE_MIN_POLL = 0.05
+SSE_MAX_POLL = 5.0
 
 TRACE_SUFFIXES = (".jsonl",)
 
@@ -55,6 +61,10 @@ _PAGE_STYLE = """
            color: #8b949e; }
     a.tag:hover { text-decoration: none; border-color: #58a6ff; color: #58a6ff; }
     .tag.active { color: #58a6ff; border-color: #58a6ff; }
+    .pill { display: inline-block; border-radius: 10px; padding: 0.05rem 0.6rem;
+            font-size: 0.8rem; border: 1px solid #30363d; }
+    .pill.live { color: #3fb950; border-color: #3fb950; }
+    .pill.off { color: #e3b341; border-color: #e3b341; }
 """
 
 
@@ -285,6 +295,7 @@ def render_index_html(
             f"<td class=\"num\">{duration}</td>"
             "<td class=\"actions\">"
             f"<a href=\"/trace/{link}\">timeline</a>"
+            f"<a href=\"/trace/{link}/live\">live</a>"
             f"<a href=\"/trace/{link}/cost\">cost</a>"
             f"{diff_links}"
             "</td>"
@@ -439,9 +450,93 @@ def render_cost_html(trace: Trace, report: CostReport, file_name: str) -> str:
     return _page(f"Cost: {trace.name}", "".join(body_parts))
 
 
+_LIVE_SCRIPT = """
+(function () {
+  var tbody = document.getElementById("spans");
+  var status = document.getElementById("status");
+  var count = document.getElementById("count");
+  var source = new EventSource(EVENTS_URL);
+  function fmtDuration(s) {
+    if (s.end_time == null) { return "running"; }
+    return (s.end_time - s.start_time).toFixed(3) + "s";
+  }
+  source.addEventListener("span", function (e) {
+    var s = JSON.parse(e.data);
+    var tr = document.createElement("tr");
+    var cells = [
+      s.name,
+      s.span_id,
+      String((s.events || []).length),
+      fmtDuration(s),
+    ];
+    for (var i = 0; i < cells.length; i++) {
+      var td = document.createElement("td");
+      if (i >= 2) { td.className = "num"; }
+      td.textContent = cells[i];
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+    count.textContent = String(parseInt(count.textContent, 10) + 1);
+  });
+  source.addEventListener("end", function () {
+    status.textContent = "stream ended";
+    status.className = "pill off";
+    source.close();
+  });
+  source.onopen = function () {
+    status.textContent = "live";
+    status.className = "pill live";
+  };
+  source.onerror = function () {
+    status.textContent = "reconnecting";
+    status.className = "pill off";
+  };
+})();
+"""
+
+
+def render_live_html(trace: Trace, file_name: str) -> str:
+    """Render the live-following page for one trace.
+
+    Spans already in the file are rendered server-side; the page then
+    subscribes to the trace's server-sent events stream and appends each
+    new span as the writer saves it.
+    """
+    link = quote(file_name)
+    rows = []
+    for span in trace.spans:
+        duration = f"{span.duration:.3f}s" if span.duration is not None else "running"
+        rows.append(
+            "<tr>"
+            f"<td>{html_mod.escape(span.name)}</td>"
+            f"<td>{html_mod.escape(span.span_id)}</td>"
+            f"<td class=\"num\">{len(span.events)}</td>"
+            f"<td class=\"num\">{duration}</td>"
+            "</tr>"
+        )
+    script = (
+        f"var EVENTS_URL = \"/trace/{link}/events?from_end=1\";" + _LIVE_SCRIPT
+    )
+    body = (
+        "<a class=\"back\" href=\"/\">&larr; all traces</a>"
+        f"<h1>Live: {html_mod.escape(trace.name)} "
+        "<span id=\"status\" class=\"pill off\">connecting</span></h1>"
+        f"<div class=\"meta\">{html_mod.escape(file_name)} | "
+        f"<span id=\"count\">{len(trace.spans)}</span> span(s) | "
+        f"new spans stream in as the agent writes them | "
+        f"<a href=\"/trace/{link}\">static timeline</a></div>"
+        "<table><thead><tr><th>Span</th><th>Id</th><th>Events</th>"
+        "<th>Duration</th></tr></thead>"
+        f"<tbody id=\"spans\">{''.join(rows)}</tbody></table>"
+        f"<script>{script}</script>"
+    )
+    return _page(f"Live: {trace.name}", body)
+
+
 class TraceRequestHandler(BaseHTTPRequestHandler):
     """Routes: /?tag=, /api/traces?tag=, /api/search?q=&tag=, /trace/<file>,
-    /trace/<file>/cost, /diff?a=&b=, /search?q=&tag=."""
+    /trace/<file>/cost, /trace/<file>/live, /trace/<file>/events (SSE),
+    /diff?a=&b=, /search?q=&tag=."""
 
     server: TraceServer
 
@@ -466,6 +561,10 @@ class TraceRequestHandler(BaseHTTPRequestHandler):
                 self._serve_trace_view(segments[1], view="timeline")
             elif segments[0] == "trace" and len(segments) == 3 and segments[2] == "cost":
                 self._serve_trace_view(segments[1], view="cost")
+            elif segments[0] == "trace" and len(segments) == 3 and segments[2] == "live":
+                self._serve_trace_view(segments[1], view="live")
+            elif segments[0] == "trace" and len(segments) == 3 and segments[2] == "events":
+                self._serve_trace_events(segments[1], parse_qs(parsed.query))
             elif segments == ["diff"]:
                 self._serve_diff(parse_qs(parsed.query))
             else:
@@ -496,8 +595,92 @@ class TraceRequestHandler(BaseHTTPRequestHandler):
         if view == "cost":
             report = analyze_trace(trace, pricing=self.server.pricing or None)
             self._send_html(render_cost_html(trace, report, info.file_name))
+        elif view == "live":
+            self._send_html(render_live_html(trace, info.file_name))
         else:
             self._send_html(render_trace_html(trace))
+
+    @staticmethod
+    def _float_param(
+        query: dict[str, list[str]], name: str, default: float
+    ) -> float | None:
+        """Parse a non-negative float query parameter, None when invalid."""
+        raw = (query.get(name) or [""])[0].strip()
+        if not raw:
+            return default
+        try:
+            value = float(raw)
+        except ValueError:
+            return None
+        if value < 0:
+            return None
+        return value
+
+    def _serve_trace_events(self, file_name: str, query: dict[str, list[str]]) -> None:
+        """Stream trace updates as server-sent events.
+
+        Emits ``header``, ``span``, and ``malformed`` events as the trace
+        file grows, using the same tailing logic as the follow command.
+        ``?from_end=1`` skips spans already in the file, ``?poll=`` sets
+        the file check interval in seconds, and ``?timeout=`` closes the
+        stream after that many idle seconds (0, the default, streams until
+        the client disconnects).
+        """
+        info = self._lookup(file_name)
+        if info is None:
+            self._send_error_page(404, f"No trace named {file_name!r} in this directory.")
+            return
+        from_end = (query.get("from_end") or [""])[0].strip() in ("1", "true", "yes")
+        poll = self._float_param(query, "poll", SSE_DEFAULT_POLL)
+        timeout = self._float_param(query, "timeout", 0.0)
+        if poll is None or timeout is None:
+            self._send_error_page(400, "poll and timeout must be non-negative numbers.")
+            return
+        poll = min(max(poll, SSE_MIN_POLL), SSE_MAX_POLL)
+
+        follower = TraceFollower(info.path, from_start=not from_end)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+
+        idle = 0.0
+        try:
+            self.wfile.write(b": stream open\n\n")
+            self.wfile.flush()
+            while True:
+                updates = follower.poll()
+                if updates:
+                    idle = 0.0
+                    for update in updates:
+                        payload: Any
+                        if update.kind == KIND_HEADER:
+                            payload = update.header
+                        elif update.kind == KIND_SPAN and update.span is not None:
+                            payload = update.span.to_dict()
+                        elif update.kind == KIND_MALFORMED:
+                            payload = {"raw": update.raw}
+                        else:
+                            continue
+                        message = (
+                            f"event: {update.kind}\n"
+                            f"data: {json.dumps(payload)}\n\n"
+                        )
+                        self.wfile.write(message.encode("utf-8"))
+                    self.wfile.flush()
+                    continue
+                if timeout and idle >= timeout:
+                    self.wfile.write(b"event: end\ndata: {\"reason\": \"idle timeout\"}\n\n")
+                    self.wfile.flush()
+                    return
+                # Keepalive comment so idle streams are not dropped by proxies.
+                if idle and idle % 15 < poll:
+                    self.wfile.write(b": keepalive\n\n")
+                    self.wfile.flush()
+                time.sleep(poll)
+                idle += poll
+        except (BrokenPipeError, ConnectionResetError):
+            return
 
     @staticmethod
     def _tag_param(query: dict[str, list[str]]) -> str | None:

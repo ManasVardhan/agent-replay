@@ -32,12 +32,15 @@ Attach tags to traces at record time so large trace directories stay navigable. 
 ### 🔁 Live Trace Following
 Watch a long-running agent without waiting for it to finish. Shipped in v0.4.0 as the `follow` CLI command backed by `TraceFollower`: it reads the spans already in a JSONL trace, then tails the file and streams each new span and its events to the terminal as the writer appends them. `--from-end` skips existing spans and shows only new activity, `--poll-interval` controls how often the file is checked, and `--timeout` stops after a set number of idle seconds (0 follows until Ctrl+C). The follower tracks a byte offset and buffers partial trailing lines, so a span still mid-write is not parsed until its newline arrives. Python API: `TraceFollower.poll()` returns typed `FollowUpdate` records (header, span, or malformed).
 
+### 🌊 Live Trace Server Streaming
+Push new spans to the browser trace server over server-sent events as they are written, so the web view updates live while an agent runs, matching the terminal `follow` command. Shipped in v0.5.0: every trace on the server index gains a live view at `/trace/<file>/live` that renders existing spans server-side, then subscribes to the new `/trace/<file>/events` SSE endpoint and appends each new span as the writer saves it, with a live/reconnecting status pill and no JavaScript dependencies. The events endpoint reuses the `TraceFollower` tailing logic (mid-write spans wait for their newline, malformed lines are reported as `malformed` events instead of crashing the stream) and takes `?from_end=1` to skip existing spans, `?poll=` for the check interval, and `?timeout=` to close after idle seconds with an `end` event, so it is scriptable with curl or EventSource. `render_live_html()` is exported in the Python API.
+
 ---
 
-## v0.5 (Planned)
+## v0.6 (Planned)
 
-### 🌊 Live Trace Server Streaming
-Push new spans to the browser trace server over server-sent events as they are written, so the web timeline updates live while an agent runs, matching the terminal `follow` command.
+### 📦 Trace Archive and Retention
+Compress old traces into a single archive file with a retention policy (keep the last N runs or days), so long-running agents do not fill the trace directory, while archived runs stay searchable.
 
 ---
 
